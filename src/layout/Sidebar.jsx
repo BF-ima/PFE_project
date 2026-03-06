@@ -25,7 +25,7 @@ const Sidebar = ({ menuItems = MENU_ITEMS }) => {
       {/* Logo */}
       <div className="w-10 h-10 flex items-center justify-center">
         <img 
-          src="/icons/PFE_icon.svg" 
+          src="src/assets/PFE_icon.svg" 
           alt="Logo" 
           width={40} 
           height={40}
