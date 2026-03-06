@@ -1,5 +1,4 @@
-CREATE DATABASE pfe_bdd;
-USE pfe_bdd;
+
 
 -- Users table (base table for authentication)
 CREATE TABLE users (
@@ -72,8 +71,54 @@ CREATE TABLE entreprises (
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+CREATE TABLE projects (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ title VARCHAR(255),
+ description TEXT,
+ technologies TEXT,
+ speciality VARCHAR(100),
+ teacher_id INT,
+ max_students INT,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
+CREATE TABLE project_views (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ student_id INT,
+ project_id INT,
+ viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
+CREATE TABLE teams (
+id INT AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(255),
+leader_id INT,
+status ENUM('forming','submitted','assigned') DEFAULT 'forming',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE team_members (
+id INT AUTO_INCREMENT PRIMARY KEY,
+team_id INT,
+student_id INT,
+joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE wishes (
+id INT AUTO_INCREMENT PRIMARY KEY,
+team_id INT,
+project_id INT,
+priority INT
+);
+
+CREATE TABLE deliverables (
+id INT AUTO_INCREMENT PRIMARY KEY,
+team_id INT,
+title VARCHAR(255),
+file_path VARCHAR(255),
+version INT,
+uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 select * from enseignants
  
