@@ -6,6 +6,7 @@ import elearn from "../assets/elearn.png"
 import logo from "../assets/logo.jpg"
 import { Link } from 'react-router-dom'
 
+//onSubmit must be on <form>, not <div>
 
 function Login() {
   const [showPw, setShowPw] = useState(false);
@@ -40,10 +41,12 @@ const handleLogin = async (e) => {
     console.log("Profile:", data.profile);
 
           // Navigate based on role
-      if (data.role === "super_admin") {
-        navigate("/dashboard/super-admin");
-      } else if (data.role === "admin") {
-        navigate("/dashboard/admin");
+      if (data.role === "super_admin" || data.role === "admin") {
+        navigate("/projectsdashboard");
+      } else if (data.role === "enseignant") {
+        navigate("/supervisor/homepage");
+      } else if (data.role === "etudiant") {
+        navigate("/student/firstpage");
       } else {
         navigate("/");
       }
@@ -122,10 +125,12 @@ const handleLogin = async (e) => {
         </div>
 
         {/* ── RIGHT PANEL ── */}
-        <div className="flex-1 flex flex-col justify-center px-12 py-14" onSubmit={handleLogin}>
+        <div className="flex-1 flex flex-col justify-center px-12 py-14">
           <h2 className="text-xl font-semibold text-slate-800 mb-8 tracking-tight">
             Welcome to login system
           </h2>
+
+          <form onSubmit={handleLogin}>
 
           {/* Email */}
           <div className="relative mb-4 ">
@@ -184,6 +189,7 @@ const handleLogin = async (e) => {
           >
             LOGIN
           </button>
+          </form>
         </div>
       </div>
     </div>
