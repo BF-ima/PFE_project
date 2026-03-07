@@ -23,7 +23,7 @@ app.use(cookieParser());        // pour lire cookies
 app.use(helmet());              // sécurité headers HTTP
 app.use(morgan("dev"));         // logs des requêtes
 app.use(cors({
-  origin: 'http://localhost:3001', // Your React app
+  origin: 'http://localhost:5173', // Your React app
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

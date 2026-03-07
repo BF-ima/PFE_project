@@ -11,13 +11,10 @@ exports.getMyProfile = async (req, res) => {
         const userId = req.user.id;
 
         const [student] = await db.execute(
-            `SELECT u.id,u.email,u.role,
-                    e.full_name,
-                    e.student_id,
-                    e.classe,
-                    e.enrollment_date
-             FROM users u
-             JOIN etudiants e ON u.id = e.id
+            `SELECT u.id,u.email,u.role, u.first_name, u.last_name,
+                    s.moyenne, s.status, s.graduation_date, s.speciality_id, s.promo_id
+             FROM user u
+             JOIN student s ON u.id = s.id
              WHERE u.id = ?`,
             [userId]
         );
@@ -56,11 +53,24 @@ exports.updateMyProfile = async (req,res)=>{
             classe
         } = req.body;
 
+        const nameParts = full_name.split(' ');
+        const first_name = nameParts[0] || '';
+        const last_name = nameParts.slice(1).join(' ') || '';
+
+        // Update user table
         await db.execute(
-            `UPDATE etudiants
-             SET full_name=?,classe=?
+            `UPDATE user
+             SET first_name=?, last_name=?
              WHERE id=?`,
-             [full_name,classe,userId]
+             [first_name, last_name, userId]
+        );
+
+        // Update student table
+        await db.execute(
+            `UPDATE student
+             SET promo_id=?
+             WHERE id=?`,
+             [classe, userId]
         );
 
         res.json({
@@ -93,13 +103,11 @@ exports.getStudentById = async (req,res)=>{
         const studentId = req.params.id;
 
         const [student] = await db.execute(
-            `SELECT u.id,u.email,
-                    e.full_name,
-                    e.student_id,
-                    e.classe
-             FROM users u
-             JOIN etudiants e
-             ON u.id=e.id
+            `SELECT u.id,u.email, u.first_name, u.last_name,
+                    s.moyenne, s.status, s.graduation_date, s.speciality_id, s.promo_id
+             FROM user u
+             JOIN student s
+             ON u.id=s.id
              WHERE u.id=?`,
             [studentId]
         );

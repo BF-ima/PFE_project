@@ -21,7 +21,7 @@ exports.authenticate = async (req, res, next) => {
         
         // Get full user data from database
         const [users] = await db.execute(
-            "SELECT id, email, role, created_by FROM users WHERE id = ?",
+            "SELECT id, email, role, created_by FROM user WHERE id = ?",
             [decoded.id]
         );
         

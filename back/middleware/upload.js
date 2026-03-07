@@ -1,15 +1,20 @@
-const multer=require("multer")
+const multer = require('multer');
 
-const storage=multer.diskStorage({
+// Stockage en mémoire
+const storage = multer.memoryStorage();
 
-destination:(req,file,cb)=>{
-cb(null,"uploads/")
-},
+// Filtre pour accepter seulement Excel
+const fileFilter = (req, file, cb) => {
+  if (
+    file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    file.mimetype === 'application/vnd.ms-excel'
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error('Seuls les fichiers Excel sont autorisés'), false);
+  }
+};
 
-filename:(req,file,cb)=>{
-cb(null,Date.now()+"_"+file.originalname)
-}
+const upload = multer({ storage, fileFilter });
 
-})
-
-module.exports=multer({storage})
+module.exports = upload;
