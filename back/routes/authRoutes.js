@@ -11,6 +11,9 @@ const {
 } = require("../controllers/authController");
 const { authenticate } = require("../middleware/authMiddleware");
 const { checkRole, isSuperAdmin, isAdmin, canAccessUser } = require("../middleware/roleMiddleware");
+const upload = require("../middleware/upload");
+const authController = require("../controllers/authController");
+
 
 const router = express.Router();
 
@@ -30,7 +33,8 @@ router.post(
     [
         body("email").isEmail().withMessage("Email invalide"),
         body("password").isLength({ min: 6 }).withMessage("Mot de passe doit contenir au moins 6 caractères"),
-        body("full_name").notEmpty().withMessage("Nom complet requis")
+        body("first_name").notEmpty().withMessage("Prénom requis"),
+        body("last_name").notEmpty().withMessage("Nom requis")
     ],
     validate,
     createDefaultSuperAdmin
@@ -63,11 +67,22 @@ router.post(
         body("email").isEmail().withMessage("Email invalide"),
         body("password").isLength({ min: 6 }).withMessage("Mot de passe doit contenir au moins 6 caractères"),
         body("role").isIn(['admin', 'enseignant', 'etudiant', 'entreprise']).withMessage("Rôle invalide"),
-        body("full_name").notEmpty().withMessage("Nom complet requis"),
+        body("first_name").notEmpty().withMessage("Prénom requis"),
+        body("last_name").notEmpty().withMessage("Nom requis"),
+        // Enseignant fields
         body("department").if(body("role").equals("enseignant")).notEmpty().withMessage("Département requis"),
+        body("specialization").if(body("role").equals("enseignant")).optional(),
+        // Etudiant fields
         body("student_id").if(body("role").equals("etudiant")).notEmpty().withMessage("ID étudiant requis"),
-        body("class").if(body("role").equals("etudiant")).notEmpty().withMessage("Classe requise"),
-        body("company_name").if(body("role").equals("entreprise")).notEmpty().withMessage("Nom d'entreprise requis")
+        body("classe").if(body("role").equals("etudiant")).notEmpty().withMessage("Classe requise"),
+        body("speciality_id").if(body("role").equals("etudiant")).isInt().withMessage("Spécialité requise"),
+        body("promo_id").if(body("role").equals("etudiant")).isInt().withMessage("Promo requise"),
+        body("moyenne").if(body("role").equals("etudiant")).isFloat({ min: 0, max: 20 }).withMessage("Moyenne invalide"),
+        // Entreprise fields
+        body("company_name").if(body("role").equals("entreprise")).notEmpty().withMessage("Nom d'entreprise requis"),
+        body("contact_person").if(body("role").equals("entreprise")).optional(),
+        body("phone").if(body("role").equals("entreprise")).optional().isMobilePhone().withMessage("Téléphone invalide"),
+        body("address").if(body("role").equals("entreprise")).optional()
     ],
     validate,
     register
@@ -154,5 +169,17 @@ router.get(
         });
     }
 );
+
+
+router.post(
+    "/import-users",
+    upload.single("file"),
+    [
+        body("role").isIn(['admin', 'enseignant', 'etudiant', 'entreprise']).withMessage("Rôle invalide")
+    ],
+    validate,
+    authController.importUsersFromExcel
+);
+
 
 module.exports = router;

@@ -10,6 +10,7 @@
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const XLSX = require("xlsx");
 
 
 /**
@@ -46,12 +47,14 @@ const isSuperAdmin = async (userId) => {
 exports.createDefaultSuperAdmin = async (req, res) => {
     try {
         // Check if any super admin exists
-        const [existing] = await db.execute("SELECT id FROM users WHERE role = 'super_admin'");
+        const [existing] = await db.execute("SELECT id FROM user WHERE role = 'super_admin'");
         if (existing.length > 0) {
             return res.status(400).json({ message: "Un super admin existe déjà" });
         }
         
-        const { email, password, full_name } = req.body;
+        const { email, password, first_name, last_name} = req.body;
+        
+        const full_name = `${first_name} ${last_name}`;
         
         // Default permissions for super admin
         const defaultPermissions = {
@@ -73,10 +76,10 @@ exports.createDefaultSuperAdmin = async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Insert into users table
+            // Insert into user table
             const [userResult] = await connection.execute(
-                "INSERT INTO users (email, password, role) VALUES (?, ?, 'super_admin')",
-                [email, hashedPassword] // created_by is null for super admin
+                "INSERT INTO user (first_name, last_name, email, password, role) VALUES (?, ?, ?, ?, 'super_admin')",
+                [first_name, last_name, email, hashedPassword]
             );
 
             const userId = userResult.insertId;
@@ -135,7 +138,8 @@ exports.register = async (req, res) => {
         }
 
         const { 
-            full_name, 
+            first_name,
+            last_name, 
             email, 
             password, 
             role, 
@@ -147,10 +151,15 @@ exports.register = async (req, res) => {
             classe,
             company_name,
             contact_person,
+            speciality_id,
+            promo_id,
+            moyenne,
             phone,
             address,
             registration_number
         } = req.body;
+
+        
 
         // Validate role
         const allowedRoles = ['admin', 'enseignant', 'etudiant', 'entreprise'];
@@ -162,7 +171,7 @@ exports.register = async (req, res) => {
 
         // Check if email exists
         const [existing] = await db.execute(
-            "SELECT id FROM users WHERE email = ?", 
+            "SELECT id FROM user WHERE email = ?", 
             [email]
         );
         if (existing.length > 0) {
@@ -201,10 +210,10 @@ exports.register = async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Insert into users table
+            // Insert into user table
             const [userResult] = await connection.execute(
-                "INSERT INTO users (email, password, role, created_by) VALUES (?, ?, ?, ?)",
-                [email, hashedPassword, role, currentUserId]
+                "INSERT INTO user (first_name, last_name, email, password, role, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+                [first_name, last_name, email, hashedPassword, role, currentUserId]
             );
 
             const userId = userResult.insertId;// Get the new user's ID
@@ -214,37 +223,37 @@ exports.register = async (req, res) => {
                 case 'admin':
                     // For regular admins, super admin can assign specific permissions
                     await connection.execute(
-                        `INSERT INTO admins 
-                        (id, full_name, permissions, created_by) 
-                        VALUES (?, ?, ?, ?)`,
-                        [userId, full_name, JSON.stringify(permissions || {}), currentUserId]
+                        `INSERT INTO administrator 
+                        (id) 
+                        VALUES (?)`,
+                        [userId]
                     );
                     break;
 
                 case 'enseignant':
                     await connection.execute(
-                        `INSERT INTO enseignants 
-                        (id, full_name, department, specialization, created_by) 
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [userId, full_name, department, specialization, currentUserId]
+                        `INSERT INTO teacher 
+                        (id, grade) 
+                        VALUES (?, ?)`,
+                        [userId, specialization]
                     );
                     break;
 
                 case 'etudiant':
                     await connection.execute(
-                        `INSERT INTO etudiants 
-                        (id, full_name, student_id, classe, created_by) 
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [userId, full_name, student_id, classe,currentUserId]
+                        `INSERT INTO student 
+                        (id, moyenne, status, graduation_date, speciality_id, promo_id) 
+                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        [userId, moyenne, 'ACTIVE', null, speciality_id, promo_id]
                     );
                     break;
 
                 case 'entreprise':
                     await connection.execute(
-                        `INSERT INTO entreprises 
-                        (id, company_name, contact_person, phone, address, registration_number, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [userId, company_name, contact_person, phone, address, registration_number, currentUserId]
+                        `INSERT INTO external_supervisor 
+                        (id, organization, position, phone) 
+                        VALUES (?, ?, ?, ?)`,
+                        [userId, company_name, contact_person, phone]
                     );
                     break;
             }
@@ -271,6 +280,99 @@ exports.register = async (req, res) => {
 };
 
 // -----------------------------------------------------------------------------
+// REGISTER - with exel file
+// -----------------------------------------------------------------------------
+
+exports.importUsersFromExcel = async (req, res) => {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const currentUserId = decoded.id;
+
+        if (!(await isSuperAdmin(currentUserId))) {
+            return res.status(403).json({ message: "Seul le super admin peut importer" });
+        }
+
+        const file = req.file;
+        if (!file) return res.status(400).json({ message: "Aucun fichier fourni" });
+
+        const role = req.body.role; // le rôle envoyé depuis le front
+        if (!role) return res.status(400).json({ message: "Rôle manquant" });
+
+        // Lire le fichier Excel depuis le buffer
+        const workbook = XLSX.read(file.buffer, { type: "buffer" }); 
+        const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        const connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            for (const row of rows) {
+                const hashedPassword = await bcrypt.hash(row.password, 12);
+
+                // Insérer l'utilisateur
+                const [userResult] = await connection.execute(
+                    `INSERT INTO user 
+                     (first_name, last_name, email, password, role, created_by) 
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [row.first_name, row.last_name, row.email, hashedPassword, role, currentUserId]
+                );
+
+                const userId = userResult.insertId;
+
+                // Insérer dans la table spécifique selon le rôle venant du front
+                switch (role.toLowerCase()) {
+                    case "enseignant":
+                        await connection.execute(
+                            `INSERT INTO teacher (id, grade) VALUES (?, ?)`,
+                            [userId, row.specialization]
+                        );
+                        break;
+
+                    case "etudiant":
+                        await connection.execute(
+                            `INSERT INTO student 
+                             (id, moyenne, status, graduation_date, speciality_id, promo_id) 
+                             VALUES (?, ?, ?, ?, ?, ?)`,
+                            [userId, row.moyenne, 'ACTIVE', null, row.speciality_id, row.promo_id]
+                        );
+                        break;
+
+                    case "entreprise":
+                        await connection.execute(
+                            `INSERT INTO external_supervisor 
+                             (id, organization, position, phone) 
+                             VALUES (?, ?, ?, ?)`,
+                            [userId, row.company_name, row.contact_person, row.phone]
+                        );
+                        break;
+
+                    default:
+                        console.warn(`Rôle inconnu fourni depuis le front : ${role}`);
+                }
+            }
+
+            await connection.commit();
+            res.json({ message: "Utilisateurs importés avec succès" });
+
+        } catch (error) {
+            await connection.rollback();
+            console.error("Erreur transaction :", error);
+            res.status(500).json({ message: "Erreur lors de l'import dans la base de données" });
+        } finally {
+            connection.release();
+        }
+
+    } catch (err) {
+        console.error("Erreur serveur :", err);
+        res.status(500).json({ message: "Erreur serveur lors de l'import Excel" });
+    }
+};
+
+// -----------------------------------------------------------------------------
 // LOGIN
 // -----------------------------------------------------------------------------
 exports.login = async (req, res) => {
@@ -278,7 +380,7 @@ exports.login = async (req, res) => {
     
     try {
         // chercher l'utilisateur
-        const [users] = await db.execute("SELECT * FROM users WHERE email = ?", [email]);
+        const [users] = await db.execute("SELECT * FROM user WHERE email = ?", [email]);
         if (users.length === 0) return res.status(400).json({ message: "Email invalide" });
 
         const user = users[0];
@@ -298,19 +400,19 @@ exports.login = async (req, res) => {
                 profile = superData[0];
                 break;
             case 'admin':
-                const [adminData] = await db.execute("SELECT * FROM admins WHERE id = ?", [user.id]);
+                const [adminData] = await db.execute("SELECT * FROM administrator WHERE id = ?", [user.id]);
                 profile = adminData[0];
                 break;
             case 'enseignant':
-                const [ensData] = await db.execute("SELECT * FROM enseignants WHERE id = ?", [user.id]);
+                const [ensData] = await db.execute("SELECT * FROM teacher WHERE id = ?", [user.id]);
                 profile = ensData[0];
                 break;
             case 'etudiant':
-                const [etuData] = await db.execute("SELECT * FROM etudiants WHERE id = ?", [user.id]);
+                const [etuData] = await db.execute("SELECT * FROM student WHERE id = ?", [user.id]);
                 profile = etuData[0];
                 break;
             case 'entreprise':
-                const [entData] = await db.execute("SELECT * FROM entreprises WHERE id = ?", [user.id]);
+                const [entData] = await db.execute("SELECT * FROM external_supervisor WHERE id = ?", [user.id]);
                 profile = entData[0];
                 break;
         }
@@ -367,7 +469,7 @@ exports.canAccessUser = async (requesterId, targetId) => {// requesterId: ID of 
     
     // Check if requester created this user
     const [target] = await db.execute(
-        "SELECT created_by FROM users WHERE id = ?",
+        "SELECT created_by FROM user WHERE id = ?",
         [targetId]
     );
     
@@ -497,17 +599,8 @@ exports.getMyUsers = async (req, res) => {
         if (await isSuperAdmin(userId)) {
             const [users] = await db.execute(`
                 SELECT u.id, u.email, u.role,
-                       CASE 
-                           WHEN u.role = 'admin' THEN a.full_name
-                           WHEN u.role = 'enseignant' THEN e.full_name
-                           WHEN u.role = 'etudiant' THEN et.full_name
-                           WHEN u.role = 'entreprise' THEN ent.company_name
-                       END as display_name
-                FROM users u
-                LEFT JOIN admins a ON u.id = a.id AND u.role = 'admin'
-                LEFT JOIN enseignants e ON u.id = e.id AND u.role = 'enseignant'
-                LEFT JOIN etudiants et ON u.id = et.id AND u.role = 'etudiant'
-                LEFT JOIN entreprises ent ON u.id = ent.id AND u.role = 'entreprise'
+                       CONCAT(u.first_name, ' ', u.last_name) as display_name
+                FROM user u
             `);
             return res.json({ users });
         }
@@ -530,17 +623,8 @@ exports.getMyUsers = async (req, res) => {
         // 4️⃣ Build query → only include allowed users
         let query = `
             SELECT u.id, u.email, u.role,
-                   CASE 
-                       WHEN u.role = 'admin' THEN a.full_name
-                       WHEN u.role = 'enseignant' THEN e.full_name
-                       WHEN u.role = 'etudiant' THEN et.full_name
-                       WHEN u.role = 'entreprise' THEN ent.company_name
-                   END as display_name
-            FROM users u
-            LEFT JOIN admins a ON u.id = a.id AND u.role = 'admin'
-            LEFT JOIN enseignants e ON u.id = e.id AND u.role = 'enseignant'
-            LEFT JOIN etudiants et ON u.id = et.id AND u.role = 'etudiant'
-            LEFT JOIN entreprises ent ON u.id = ent.id AND u.role = 'entreprise'
+                   CONCAT(u.first_name, ' ', u.last_name) as display_name
+            FROM user u
             WHERE 1=1
         `;
 
