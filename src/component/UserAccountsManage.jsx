@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import AddUserModal from "../layout/AddUserModal";
 import { useNavigate } from "react-router-dom";
-// ✅ Si ImportModal n'existe pas encore, commente cette ligne temporairement
 import ImportModal from "../layout/ImportModal.jsx";
 import Sidebar from "../layout/Sidebar.jsx";
 import {
@@ -296,9 +295,11 @@ const UserInfoModal = ({ user, userType, onClose }) => {
           <h2 className="text-xl font-semibold">
             {userType === "admin"
               ? "Admin Information"
-              : userType === "supervisor"
-                ? "Supervisor Information"
-                : "Student Information"}
+              : userType === "teacher"
+                ? "Teacher Information"
+                : userType === "externalSupervisor"
+                  ? "External Supervisor Information"
+                  : "Student Information"}
           </h2>
           <button
             onClick={onClose}
@@ -355,23 +356,15 @@ const UserInfoModal = ({ user, userType, onClose }) => {
                 <p className="mt-1 text-gray-900">{user?.role || "N/A"}</p>
               </div>
             )}
-            {userType === "supervisor" && (
-              <>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Specialization
-                  </label>
-                  <p className="mt-1 text-gray-900">
-                    {user?.specialization || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Type
-                  </label>
-                  <p className="mt-1 text-gray-900">{user?.type || "N/A"}</p>
-                </div>
-              </>
+            {(userType === "teacher" || userType === "externalSupervisor") && (
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Specialization
+                </label>
+                <p className="mt-1 text-gray-900">
+                  {user?.specialization || "N/A"}
+                </p>
+              </div>
             )}
             {userType === "student" && (
               <>
@@ -430,6 +423,14 @@ const ModifyUserModal = ({ user, userType, onSave, onClose }) => {
   });
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // ✅ Validation email : @esi-sba.dz requis SAUF pour superviseur externe
+    const isExternalSupervisor = userType === "externalSupervisor";
+    if (!isExternalSupervisor && !formData.email.endsWith("@esi-sba.dz")) {
+      alert("L'email doit se terminer par @esi-sba.dz ");
+      return;
+    }
+
     onSave({ ...user, ...formData });
   };
   return (
@@ -440,9 +441,11 @@ const ModifyUserModal = ({ user, userType, onSave, onClose }) => {
             Modify{" "}
             {userType === "admin"
               ? "Admin"
-              : userType === "supervisor"
-                ? "Supervisor"
-                : "Student"}
+              : userType === "teacher"
+                ? "Teacher"
+                : userType === "externalSupervisor"
+                  ? "External Supervisor"
+                  : "Student"}
           </h2>
           <button
             onClick={onClose}
@@ -554,6 +557,9 @@ const ModifyUserModal = ({ user, userType, onSave, onClose }) => {
                   <option value="Gestion des Projets PFE">
                     Gestion des Projets PFE
                   </option>
+                  <option value="Gestion Des Comptes Supervisor Et Student">
+                    Gestion Des Comptes Supervisor Et Student
+                  </option>
                   <option value="Gestion des Attibutions">
                     Gestion des Attibutions
                   </option>
@@ -569,40 +575,20 @@ const ModifyUserModal = ({ user, userType, onSave, onClose }) => {
                 </select>
               </div>
             )}
-            {userType === "supervisor" && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Specialization
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.specialization}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        specialization: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type
-                  </label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) =>
-                      setFormData({ ...formData, type: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                  >
-                    <option value="Interne">Interne</option>
-                    <option value="Externe">Externe</option>
-                  </select>
-                </div>
-              </>
+            {(userType === "teacher" || userType === "externalSupervisor") && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Specialization
+                </label>
+                <input
+                  type="text"
+                  value={formData.specialization}
+                  onChange={(e) =>
+                    setFormData({ ...formData, specialization: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
+                />
+              </div>
             )}
             {userType === "student" && (
               <>
@@ -766,7 +752,7 @@ const UserTable = ({
           item?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (userType === "admin"
             ? item?.role?.toLowerCase().includes(searchQuery.toLowerCase())
-            : userType === "supervisor"
+            : userType === "externalSupervisor" || userType === "teacher"
               ? item?.specialization
                   ?.toLowerCase()
                   .includes(searchQuery.toLowerCase())
@@ -788,12 +774,10 @@ const UserTable = ({
             </th>
           </>
         );
-      case "supervisor":
+      case "teacher":
+      case "externalSupervisor":
         return (
           <>
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-              Type
-            </th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
               Specialization
             </th>
@@ -819,17 +803,13 @@ const UserTable = ({
             <span className="text-sm text-gray-600">{item?.role}</span>
           </td>
         );
-      case "supervisor":
+      case "teacher":
+      case "externalSupervisor":
         return (
           <>
-            <td className="px-6 py-4 whitespace-nowrap">
-              <span className="text-sm text-gray-600">{item?.type}</span>
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap">
-              <span className="text-sm text-gray-600">
-                {item?.specialization}
-              </span>
-            </td>
+            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              Specialization
+            </th>
           </>
         );
       case "student":
@@ -845,7 +825,8 @@ const UserTable = ({
   const getTypeLabel = () =>
     ({
       admin: "administrateur",
-      supervisor: "superviseur",
+      teacher: "enseignant",
+      externalSupervisor: "superviseur externe",
       student: "étudiant",
     })[userType] || "utilisateur";
   return (
@@ -933,8 +914,14 @@ function UserManagement() {
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const navigate = useNavigate();
-  
-  const [currentUser] = useState({ id: 1, firstName: 'Admin', lastName: 'Principal', email: 'admin@univ.edu', role: 'Super Admin' });
+
+  const [currentUser] = useState({
+    id: 1,
+    firstName: "Admin",
+    lastName: "Principal",
+    email: "admin@esi-sba.dz",
+    role: "Super Admin",
+  });
 
   const [admins, setAdmins] = useState([
     {
@@ -942,7 +929,7 @@ function UserManagement() {
       name: "Sara Benali",
       firstName: "Sara",
       lastName: "Benali",
-      email: "sara.admin@univ.edu",
+      email: "sara.admin@esi-sba.dz",
       role: "Gestion des Projets PFE",
       status: "Active",
       lastActive: "2024-01-15",
@@ -954,7 +941,7 @@ function UserManagement() {
       name: "Marie Dupont",
       firstName: "Marie",
       lastName: "Dupont",
-      email: "marie.admin@univ.edu",
+      email: "marie.admin@esi-sba.dz",
       role: "Gestion des Attibutions",
       status: "Active",
       lastActive: "2024-01-14",
@@ -962,19 +949,34 @@ function UserManagement() {
       username: "marie.dupont",
     },
   ]);
-  const [supervisors, setSupervisors] = useState([
+  const [teachers, setTeachers] = useState([
     {
       id: 1,
       name: "Dr. Marie Dupont",
       firstName: "Marie",
       lastName: "Dupont",
-      email: "marie.dupont@univ.edu",
-      type: "Interne",
+      email: "marie.dupont@esi-sba.dz",
       specialization: "Quantum Computing",
       status: "Active",
       lastActive: "2024-01-15",
       phoneNumber: "+1234567892",
       username: "m.dupont",
+    },
+  ]);
+
+  // ✅ NOUVEAU : Tableau pour les superviseurs externes
+  const [externalSupervisors, setExternalSupervisors] = useState([
+    {
+      id: 1,
+      name: "Prof. Ahmed Benali",
+      firstName: "Ahmed",
+      lastName: "Benali",
+      email: "ahmed.benali@external-univ.edu",
+      specialization: "Artificial Intelligence",
+      status: "Active",
+      lastActive: "2024-01-15",
+      phoneNumber: "+33612345678",
+      username: "a.benali",
     },
   ]);
   const [students, setStudents] = useState([
@@ -983,7 +985,7 @@ function UserManagement() {
       name: "Alice Johnson",
       firstName: "Alice",
       lastName: "Johnson",
-      email: "alice.johnson@student.edu",
+      email: "alice.johnson@esi-sba.dz",
       major: "Ai",
       status: "Active",
       lastActive: "2024-01-15",
@@ -995,19 +997,32 @@ function UserManagement() {
 
   const handleNextView = () => {
     if (currentView === "admin") {
-      setCurrentView("supervisor");
+      setCurrentView("teacher");
       setCurrentPage(1);
-    } else if (currentView === "supervisor") {
+    } else if (currentView === "teacher") {
+      setCurrentView("externalSupervisor");
+      setCurrentPage(1);
+    } else if (currentView === "externalSupervisor") {
       setCurrentView("student");
+      setCurrentPage(1);
+    } else if (currentView === "student") {
+      setCurrentView("admin");
       setCurrentPage(1);
     }
   };
+
   const handlePrevView = () => {
     if (currentView === "student") {
-      setCurrentView("supervisor");
+      setCurrentView("externalSupervisor");
       setCurrentPage(1);
-    } else if (currentView === "supervisor") {
+    } else if (currentView === "externalSupervisor") {
+      setCurrentView("teacher");
+      setCurrentPage(1);
+    } else if (currentView === "teacher") {
       setCurrentView("admin");
+      setCurrentPage(1);
+    } else if (currentView === "admin") {
+      setCurrentView("student");
       setCurrentPage(1);
     }
   };
@@ -1022,6 +1037,14 @@ function UserManagement() {
         alert("Erreur: Données utilisateur invalides");
         return;
       }
+
+      // ✅ Validation email : @esi-sba.dz requis SAUF pour superviseur externe
+      const isExternalSupervisor = currentUserType === "externalSupervisor";
+      if (!isExternalSupervisor && !newUser.email.endsWith("@esi-sba.dz")) {
+        alert("L'email doit se terminer par @esi-sba.dz");
+        return;
+      }
+
       const today = new Date().toISOString().split("T")[0];
       const userWithDefaults = {
         ...newUser,
@@ -1031,8 +1054,10 @@ function UserManagement() {
       };
       if (currentView === "admin")
         setAdmins((prev) => [...prev, userWithDefaults]);
-      else if (currentView === "supervisor")
-        setSupervisors((prev) => [...prev, userWithDefaults]);
+      else if (currentView === "teacher")
+        setTeachers((prev) => [...prev, userWithDefaults]);
+      else if (currentView === "externalSupervisor")
+        setExternalSupervisors((prev) => [...prev, userWithDefaults]);
       else setStudents((prev) => [...prev, userWithDefaults]);
       setIsModalOpen(false);
     } catch (error) {
@@ -1052,12 +1077,23 @@ function UserManagement() {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${user.name} ?`)) {
       if (currentView === "admin")
         setAdmins((prev) => prev.filter((u) => u.id !== user.id));
-      else if (currentView === "supervisor")
-        setSupervisors((prev) => prev.filter((u) => u.id !== user.id));
+      else if (currentView === "teacher")
+        setTeachers((prev) => prev.filter((u) => u.id !== user.id));
+      else if (currentView === "externalSupervisor")
+        setExternalSupervisors((prev) => prev.filter((u) => u.id !== user.id));
       else setStudents((prev) => prev.filter((u) => u.id !== user.id));
     }
   };
   const handleSaveUser = (updatedUser) => {
+    // ✅ Validation email : @esi-sba.dz requis SAUF pour superviseur externe
+    const isExternalSupervisor = currentView === "externalSupervisor";
+    if (!isExternalSupervisor && !updatedUser.email.endsWith("@esi-sba.dz")) {
+      alert(
+        "L'email doit se terminer par @esi-sba.dz (sauf pour les superviseurs externes)",
+      );
+      return;
+    }
+
     const updatedData = {
       ...updatedUser,
       name: `${updatedUser.firstName} ${updatedUser.lastName}`.trim(),
@@ -1066,8 +1102,12 @@ function UserManagement() {
       setAdmins((prev) =>
         prev.map((u) => (u.id === updatedData.id ? updatedData : u)),
       );
-    else if (currentView === "supervisor")
-      setSupervisors((prev) =>
+    else if (currentView === "teacher")
+      setTeachers((prev) =>
+        prev.map((u) => (u.id === updatedData.id ? updatedData : u)),
+      );
+    else if (currentView === "externalSupervisor")
+      setExternalSupervisors((prev) =>
         prev.map((u) => (u.id === updatedData.id ? updatedData : u)),
       );
     else
@@ -1082,8 +1122,10 @@ function UserManagement() {
   const handleBulkImport = (users) => {
     try {
       if (currentView === "admin") setAdmins((prev) => [...prev, ...users]);
-      else if (currentView === "supervisor")
-        setSupervisors((prev) => [...prev, ...users]);
+      else if (currentView === "teacher")
+        setTeachers((prev) => [...prev, ...users]);
+      else if (currentView === "externalSupervisor")
+        setExternalSupervisors((prev) => [...prev, ...users]);
       else setStudents((prev) => [...prev, ...users]);
       setShowImportModal(false);
     } catch (error) {
@@ -1104,19 +1146,48 @@ function UserManagement() {
   const getAddButtonText = () =>
     ({
       admin: "Add an Admin",
-      supervisor: "Add a Supervisor",
+      teacher: "Add Teacher",
+      externalSupervisor: "Add External Supervisor",
       student: "Add a Student",
     })[currentView] || "Add User";
+
   const getSectionTitle = () =>
     ({
-      admin: "Admin Users management :",
-      supervisor: "Supervisor Users management :",
-      student: "Student Users management :",
+      admin: "Admins :",
+      teacher: "Teachers :",
+      externalSupervisor: "External Supervisors :",
+      student: "Students :",
     })[currentView] || "Users management :";
+
   const getCurrentData = () =>
-    ({ admin: admins, supervisor: supervisors, student: students })[
-      currentView
-    ] || [];
+    ({
+      admin: admins,
+      teacher: teachers,
+      externalSupervisor: externalSupervisors,
+      student: students,
+    })[currentView] || [];
+
+
+    // ✅ Navigation clavier : flèches gauche/droite
+useEffect(() => {
+  const handleKeyDown = (e) => {
+    // Ignorer si l'utilisateur tape dans un input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+      return;
+    }
+    
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      handleNextView();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      handlePrevView();
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [currentView, handleNextView, handlePrevView]);
 
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
@@ -1133,9 +1204,6 @@ function UserManagement() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-              
-              
-
               <button
                 onClick={handleAddUser}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -1191,8 +1259,7 @@ function UserManagement() {
           <div className="flex items-center gap-4">
             <button
               onClick={handlePrevView}
-              disabled={currentView === "admin"}
-              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-lg border transition-colors ${currentView === "admin" ? "border-gray-300 text-gray-300 cursor-not-allowed" : "border-gray-300 text-[#1e3a5f] hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5"}`}
+              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 text-[#1e3a5f] hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors"border-gray-300 text-[#1e3a5f] hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5"}`}
             >
               <ChevronLeft size={20} />
             </button>
@@ -1208,8 +1275,7 @@ function UserManagement() {
             />
             <button
               onClick={handleNextView}
-              disabled={currentView === "student"}
-              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-lg border transition-colors ${currentView === "student" ? "border-gray-300 text-gray-300 cursor-not-allowed" : "border-gray-300 text-[#1e3a5f] hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5"}`}
+              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 text-[#1e3a5f] hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors`}
             >
               <ChevronRight size={20} />
             </button>

@@ -1,87 +1,108 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from "react";
+import { X } from "lucide-react";
 
 // Composant Modal Form
 const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    phoneNumber: '',
-    email: '',
-    username: '',
-    password: '',
-    confirmPassword: '',
+    firstName: "",
+    lastName: "",
+    phoneNumber: "",
+    email: "",
+    username: "",
+    password: "",
+    confirmPassword: "",
     // Champs spécifiques
-    permission: '', // Admin
-    specialization: '', // Supervisor
-    type: '', // Supervisor
-    major: '', // Student
-    annualAverage: '' // Student
+    permission: "", // Admin
+    specialization: "", // Supervisor
+    major: "", // Student
+    annualAverage: "", // Student
   });
 
   const handleSubmit = (e) => {
-  e.preventDefault();
-  
-  // Validation des mots de passe
-  if (formData.password !== formData.confirmPassword) {
-    alert('Les mots de passe ne correspondent pas');
-    return;
-  }
+    e.preventDefault();
 
-  // Créer le nom complet
-  const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-  
-  if (!fullName || !formData.email || !formData.username) {
-    alert('Erreur: Données utilisateur invalides');
-    return;
-  }
+    // Validation des mots de passe
+    if (formData.password !== formData.confirmPassword) {
+      alert("Les mots de passe ne correspondent pas");
+      return;
+    }
 
-  // Créer l'objet utilisateur avec le champ name
-  const newUser = {
-    id: Date.now(),
-    name: fullName,  // ✅ Important: combiner firstName et lastName
-    firstName: formData.firstName,
-    lastName: formData.lastName,
-    phoneNumber: formData.phoneNumber,
-    email: formData.email,
-    username: formData.username,
-    password: formData.password,
-    status: 'Active',
-    lastActive: new Date().toISOString().split('T')[0],
-    // Champs spécifiques selon le type
-    ...(userType === 'admin' && { role: formData.permission }),
-    ...(userType === 'supervisor' && { 
-      specialization: formData.specialization,
-      type: formData.type 
-    }),
-    ...(userType === 'student' && { 
-      major: formData.major,
-      annualAverage: formData.annualAverage 
-    })
+    // ✅ Validation email : @esi-sba.dz requis SAUF pour superviseur externe
+    const isExternalSupervisor = userType === "externalSupervisor";
+
+    if (!isExternalSupervisor && !formData.email.endsWith("@esi-sba.dz")) {
+      alert("L'email doit se terminer par @esi-sba.dz");
+      return;
+    }
+
+    // Créer le nom complet
+    const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+
+    if (!fullName || !formData.email || !formData.username) {
+      alert("Erreur: Données utilisateur invalides");
+      return;
+    }
+
+    // Créer l'objet utilisateur avec le champ name
+    const newUser = {
+      id: Date.now(),
+      name: fullName,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      username: formData.username,
+      password: formData.password,
+      status: "Active",
+      lastActive: new Date().toISOString().split("T")[0],
+      // Champs spécifiques selon le type
+      ...(userType === "admin" && {
+        role: formData.permission,
+        phoneNumber: formData.phoneNumber,
+      }),
+      ...(userType === "teacher" && {
+        specialization: formData.specialization,
+        phoneNumber: formData.phoneNumber,
+      }),
+
+      ...(userType === "externalSupervisor" && {
+        phoneNumber: formData.phoneNumber,
+      }),
+
+      ...(userType === "student" && {
+        major: formData.major,
+        annualAverage: formData.annualAverage,
+      }),
+    };
+
+    onAdd(newUser);
+    onClose();
+
+    // Reset du formulaire
+    setFormData({
+      firstName: "",
+      lastName: "",
+      phoneNumber: "",
+      email: "",
+      username: "",
+      password: "",
+      confirmPassword: "",
+      permission: "",
+      specialization: "",
+      major: "",
+      annualAverage: "",
+    });
   };
 
-  onAdd(newUser);
-  onClose();
-  
-  // Reset du formulaire
-  setFormData({
-    firstName: '',
-    lastName: '',
-    phoneNumber: '',
-    email: '',
-    username: '',
-    password: '',
-    confirmPassword: '',
-    permission: '',
-    specialization: '',
-    type: '',
-    major: '',
-    annualAverage: ''
-  });
-};
   if (!isOpen) return null;
 
-  const getInputField = (label, value, onChange, type = 'text', required = true) => (
+  const getInputField = (
+    label,
+    value,
+    onChange,
+    type = "text",
+    required = true,
+    placeholder = "",
+  ) => (
     <div className="flex items-center gap-4 mb-3">
       <label className="w-32 text-sm font-medium text-gray-700 text-right">
         {label} : {required && <span className="text-red-500">*</span>}
@@ -91,6 +112,7 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
         value={value}
         onChange={onChange}
         required={required}
+        placeholder={placeholder}
         className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
@@ -109,7 +131,9 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
       >
         <option value="">Sélectionner...</option>
         {options.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
         ))}
       </select>
     </div>
@@ -121,7 +145,14 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
         {/* Header */}
         <div className="bg-linear-to-r from-blue-800 to-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-lg">
           <h2 className="text-xl font-semibold">
-            Add a new {userType === 'admin' ? 'Admin' : userType === 'supervisor' ? 'Supervisor' : 'Student'}
+            Add a new{" "}
+            {userType === "admin"
+              ? "Admin"
+              : userType === "teacher"
+                ? "Teacher"
+                : userType === "externalSupervisor"
+                  ? "External Supervisor"
+                  : "Student"}
           </h2>
           <button
             onClick={onClose}
@@ -139,61 +170,76 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
               <h3 className="text-lg font-medium text-gray-800 mb-4 border-b border-gray-300 pb-2">
                 Personal information
               </h3>
-              
-              {getInputField(
-                'First name',
-                formData.firstName,
-                (e) => setFormData({ ...formData, firstName: e.target.value })
+
+              {getInputField("First name", formData.firstName, (e) =>
+                setFormData({ ...formData, firstName: e.target.value }),
               )}
-              
-              {getInputField(
-                'Last name',
-                formData.lastName,
-                (e) => setFormData({ ...formData, lastName: e.target.value })
-              )}
-              
-              {getInputField(
-                'Phone number',
-                formData.phoneNumber,
-                (e) => setFormData({ ...formData, phoneNumber: e.target.value })
+              {getInputField("Last name", formData.lastName, (e) =>
+                setFormData({ ...formData, lastName: e.target.value }),
               )}
 
               {/* Champs spécifiques selon le type */}
-              {userType === 'admin' && getSelectField(
-                'Permission given',
-                formData.permission,
-                (e) => setFormData({ ...formData, permission: e.target.value }),
-                ['Gestion des Projets PFE', 'Gestion des Attibutions', ' Gestion des Soutenances', 'Gestion des Notes et Résultats', 'Configuration Système et Communication']
-              )}
-
-              {userType === 'supervisor' && (
+              {userType === "admin" && (
                 <>
-                  {getInputField(
-                    'Specialization',
-                    formData.specialization,
-                    (e) => setFormData({ ...formData, specialization: e.target.value })
-                  )}
                   {getSelectField(
-                    'Type',
-                    formData.type,
-                    (e) => setFormData({ ...formData, type: e.target.value }),
-                    ['Interne', 'Externe']
+                    "Permission given",
+                    formData.permission,
+                    (e) =>
+                      setFormData({ ...formData, permission: e.target.value }),
+                    [
+                      "Gestion Des Comptes Supervisor Et Student",
+                      "Gestion des Projets PFE",
+                      "Gestion des Attributions",
+                      "Gestion des Soutenances",
+                      "Gestion des Notes et Résultats",
+                      "Configuration Système et Communication",
+                    ],
+                  )}
+                  {getInputField("Phone number", formData.phoneNumber, (e) =>
+                    setFormData({ ...formData, phoneNumber: e.target.value }),
                   )}
                 </>
               )}
 
-              {userType === 'student' && (
+              {userType === "teacher" && (
                 <>
                   {getInputField(
-                    'Major',
-                    formData.major,
-                    (e) => setFormData({ ...formData, major: e.target.value })
+                    "Specialization",
+                    formData.specialization,
+                    (e) =>
+                      setFormData({
+                        ...formData,
+                        specialization: e.target.value,
+                      }),
+                  )}
+                  {getInputField("Phone number", formData.phoneNumber, (e) =>
+                    setFormData({ ...formData, phoneNumber: e.target.value }),
+                  )}
+                </>
+              )}
+
+              {userType === "externalSupervisor" && (
+                <>
+                  {getInputField("Phone number", formData.phoneNumber, (e) =>
+                    setFormData({ ...formData, phoneNumber: e.target.value }),
+                  )}
+                </>
+              )}
+
+              {userType === "student" && (
+                <>
+                  {getInputField("Major", formData.major, (e) =>
+                    setFormData({ ...formData, major: e.target.value }),
                   )}
                   {getInputField(
-                    'Annual average',
+                    "Annual average",
                     formData.annualAverage,
-                    (e) => setFormData({ ...formData, annualAverage: e.target.value }),
-                    'number'
+                    (e) =>
+                      setFormData({
+                        ...formData,
+                        annualAverage: e.target.value,
+                      }),
+                    "number",
                   )}
                 </>
               )}
@@ -204,35 +250,41 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
               <h3 className="text-lg font-medium text-gray-800 mb-4 border-b border-gray-300 pb-2">
                 Account information
               </h3>
-              
+
               {getInputField(
-                'E-mail',
+                "E-mail",
                 formData.email,
                 (e) => setFormData({ ...formData, email: e.target.value }),
-                'email'
+                "email",
+                true,
               )}
-              
-              {getInputField(
-                'Username',
-                formData.username,
-                (e) => setFormData({ ...formData, username: e.target.value })
+
+              {getInputField("Username", formData.username, (e) =>
+                setFormData({ ...formData, username: e.target.value }),
               )}
-              
               {getInputField(
-                'Password',
+                "Password",
                 formData.password,
                 (e) => setFormData({ ...formData, password: e.target.value }),
-                'password'
+                "password",
               )}
-              
               {getInputField(
-                'Confirm password',
+                "Confirm password",
                 formData.confirmPassword,
-                (e) => setFormData({ ...formData, confirmPassword: e.target.value }),
-                'password'
+                (e) =>
+                  setFormData({ ...formData, confirmPassword: e.target.value }),
+                "password",
               )}
             </div>
           </div>
+
+          {/* Info email pour superviseur */}
+          {userType === "teacher" && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+              Les superviseurs <strong>Internes</strong> doivent utiliser un
+              email <strong>@esi-sba.dz</strong>.
+            </div>
+          )}
 
           {/* Buttons */}
           <div className="flex justify-end gap-4 mt-6 pt-4 border-t border-gray-200">
