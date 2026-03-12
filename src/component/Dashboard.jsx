@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 // ==================== Composant ProfileDropdown ====================
-const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
+export const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const dropdownRef = useRef(null);
@@ -70,7 +70,7 @@ const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
       >
-        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#18335E] to-[#2D8FBF] flex items-center justify-center text-white font-semibold shadow-sm">
+        <div className="w-10 h-10 rounded-full bg-linear-to-r from-[#18335E] to-[#2D8FBF] flex items-center justify-center text-white font-semibold shadow-sm">
           {user?.firstName?.[0]}
           {user?.lastName?.[0]}
         </div>
@@ -112,7 +112,7 @@ const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md">
-            <div className="bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
+            <div className="bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Lock size={20} /> Change Password
               </h3>
@@ -196,7 +196,7 @@ const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-colors"
+                  className="px-4 py-2 bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-colors"
                 >
                   Update Password
                 </button>
@@ -210,7 +210,7 @@ const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
 };
 
 // ==================== COMPOSANTS EXISTANTS ====================
-const ProjectCard = ({ project }) => (
+export const ProjectCard = ({ project }) => (
   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-gray-300">
     <div className="space-y-4">
       {/* Project Name */}
@@ -239,7 +239,7 @@ const ProjectCard = ({ project }) => (
   </div>
 );
 
-const Pagination = ({ currentPage, totalPages, onPageChange }) => (
+export const Pagination = ({ currentPage, totalPages, onPageChange }) => (
   <div className="flex items-center justify-center gap-2 mt-8">
     <button
       onClick={() => onPageChange(currentPage - 1)}
