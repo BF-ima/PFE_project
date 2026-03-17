@@ -10,16 +10,13 @@ function AddProjectPage() {
   // title: nom du projet (obligatoire)
   // maxStudents: nombre max d'étudiants (obligatoire)
   // description: description détaillée (obligatoire)
-  // languages: technologies utilisées (obligatoire)
   const [formData, setFormData] = useState({
     title: '',
     maxStudents: '',
     description: '',
-    languages: '',
   });
 
   // ==================== DONNÉES UTILISATEUR ====================
-  // Informations du superviseur connecté
   const [currentUser] = useState({
     id: 1,
     firstName: "Supervisor",
@@ -52,7 +49,6 @@ function AddProjectPage() {
   };
 
   // ==================== ANNULATION ====================
-  // Retourne à la page des projets sans sauvegarder
   const handleCancel = () => {
     navigate('/supervisor/projectspage');
   };
@@ -130,7 +126,7 @@ function AddProjectPage() {
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                 {/* CHAMP TITRE - obligatoire */}
+                  {/* CHAMP TITRE - obligatoire */}
                   <div className="flex items-center mb-4">
                     <label className="w-32 text-xs font-medium text-[#1e3a5f]">
                       Title: <span className="text-red-500">*</span>
@@ -145,6 +141,7 @@ function AddProjectPage() {
                       placeholder="Enter project title"
                     />
                   </div>
+
                   {/* CHAMP MAX STUDENTS - obligatoire */}
                   <div className="flex items-center mb-4">
                     <label className="w-32 text-xs font-medium text-[#1e3a5f]">
@@ -162,8 +159,9 @@ function AddProjectPage() {
                       placeholder="Enter maximum number of students"
                     />
                   </div>
+
                   {/* CHAMP DESCRIPTION - obligatoire */}
-                  <div className="flex mb-4">
+                  <div className="flex mb-5"> 
                     <label className="w-32 text-xs font-medium text-[#1e3a5f] pt-2">
                       Description: <span className="text-red-500">*</span>
                     </label>
@@ -177,24 +175,8 @@ function AddProjectPage() {
                       placeholder="Enter project description"
                     />
                   </div>
-                  {/* CHAMP LANGUAGES & TOOLS - obligatoire */}
-                  <div className="flex items-center mb-5">
-                    <label className="w-32 text-xs font-medium text-[#1e3a5f]">
-                      Languages & Tools: <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="languages"
-                      value={formData.languages}
-                      onChange={handleChange}
-                      required
-                      className="flex-1 max-w-md px-3 py-2 text-sm bg-[#f5f6f8] border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] focus:border-transparent"
-                      placeholder="e.g., React, Node.js, MongoDB"
-                    />
-                  </div>
 
                   <div className="flex justify-end gap-4 pt-4">
-                    {/* Bouton Annuler - retour sans sauvegarder */}
                     <button
                       type="button"
                       onClick={handleCancel}

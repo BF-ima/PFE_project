@@ -9,12 +9,11 @@ function ModifyProjectPage() {
   const location = useLocation();
   const projectData = location.state?.project;
 
-  // États du formulaire
+  // États du formulaire - SANS LANGUAGES
   const [formData, setFormData] = useState({
     title: projectData?.title || '',
     maxStudents: projectData?.maxStudents || '',
     description: projectData?.description || '',
-    languages: projectData?.technologies || '',
   });
 
   // Données utilisateur
@@ -40,7 +39,6 @@ function ModifyProjectPage() {
     console.log('Projet à modifier:', {
       id: projectData?.id,
       ...formData,
-      languages: formData.languages.split(',').map(tech => tech.trim()),
     });
     navigate('/supervisor/projectspage');
   };
@@ -147,7 +145,7 @@ function ModifyProjectPage() {
                   </div>
 
                   {/* Description */}
-                  <div className="flex mb-4">
+                  <div className="flex mb-5"> 
                     <label className="w-32 text-xs font-medium text-[#1e3a5f] pt-2">
                       Description: <span className="text-red-500">*</span>
                     </label>
@@ -162,21 +160,6 @@ function ModifyProjectPage() {
                     />
                   </div>
 
-                  {/* Languages & Tools */}
-                  <div className="flex items-center mb-5">
-                    <label className="w-32 text-xs font-medium text-[#1e3a5f]">
-                      Languages & Tools: <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="languages"
-                      value={formData.languages}
-                      onChange={handleChange}
-                      required
-                      className="flex-1 max-w-md px-3 py-2 text-sm bg-[#f5f6f8] border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] focus:border-transparent"
-                      placeholder="e.g., React, Node.js, MongoDB"
-                    />
-                  </div>
 
                   <div className="flex justify-end gap-4 pt-4">
                     <button
