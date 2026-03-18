@@ -1,74 +1,57 @@
-import React from "react";
-import { LockKeyhole , Mail ,Eye ,EyeOff} from 'lucide-react';
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import elearn from "../assets/elearn.png"
-import logo from "../assets/logo.jpg"
-import { Link } from 'react-router-dom'
+import React, { useState } from "react";
+import { LockKeyhole, Eye, EyeOff } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import elearn from "../assets/elearn.png";
+import logo from "../assets/logo.jpg";
 
-//onSubmit must be on <form>, not <div>
+function ResetPss() {
+  const [showPw1, setShowPw1] = useState(false);
+  const [showPw2, setShowPw2] = useState(false);
+  const [form, setForm] = useState({ password: "", confirmPassword: "" });
+  const [err, setErr] = useState(null);
 
-function Login() {
-  const [showPw, setShowPw] = useState(false);
-  const [form , setForm] = useState({email:"",password:""})
-  const [remember, setRemember] = useState(false);
-  const [err,setErr] = useState(null);
+  const navigate = useNavigate();
+  const { token } = useParams(); // ✅ get token from URL
 
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (err) setErr(null);
+  };
 
-const navigate = useNavigate();
+  const handleresetpassword = async (e) => {
+    e.preventDefault();
 
+    if (!form.password || !form.confirmPassword) {
+      setErr("All fields are required");
+      return;
+    }
 
-const handleChange = (e) => {
-  setForm({...form , [e.target.name] : e.target.value})
-  if (err) setErr(null);
-}
+    if (form.password !== form.confirmPassword) {
+      setErr("Passwords do not match");
+      return;
+    }
 
-
-const handleLogin = async (e) => {
-  e.preventDefault();
-
-  if (!form.email || !form.password) {
-    setErr("All fields are required");
-    return;
-  }
-
-  try {
-    const res = await fetch("http://localhost:3000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    let data;
     try {
-      data = await res.json();
-    } catch {
-      setErr("Server did not return valid JSON");
-      return;
+      const res = await fetch(`http://localhost:3000/api/auth/reset-password/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErr(data.message || "Something went wrong");
+        return;
+      }
+
+      // success
+      navigate("/login");
+    } catch (err) {
+      console.error(err);
+      setErr("Server error, try again later");
     }
-
-    if (!res.ok) {
-      setErr(data.message || "something went wrong");
-      return;
-    }
-
-    // success
-
-    localStorage.setItem("token", data.token)
-
-
-    console.log("User role:", data.role);
-    console.log("Profile:", data.profile);
-
-    if (data.role === "super_admin" || data.role === "admin") navigate("/projectsdashboard");
-    else if (data.role === "enseignant") navigate("/supervisor/homepage");
-    else if (data.role === "etudiant") navigate("/student/firstpage");
-
-  } catch (err) {
-    console.error(err);
-    setErr("Server error, try again later");
-  }
-};
+  };
 
   return (
     <div
@@ -142,33 +125,19 @@ const handleLogin = async (e) => {
             <a href='https://elearn.esi-sba.dz/'><img src={elearn} className="mb-4 w-18 h-18"/></a>
           </div>
           <h2 className="text-xl font-semibold text-slate-800 mb-8 tracking-tight">
-            Welcome to login system
+            Enter your new password
           </h2>
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleresetpassword}>
           {err && <p className='text-red-500'>{err}</p>}
 
-          {/* Email */}
-          <div className="relative mb-4 ">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
-              <Mail className="w-4 h-4 text-gray-500" />
-            </span>
-            <input
-              type="email"
-              placeholder="e-mail"
-              name="email"
-              onChange={handleChange}
-              className="shadow-md w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          {/* Password */}
+          {/* Password 1 */}
           <div className="relative mb-3">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
               <LockKeyhole className="w-4 h-4 text-gray-500" />
             </span>
             <input
-              type={showPw ? "text" : "password"}
+              type={showPw1 ? "text" : "password"}
               placeholder="password"
               name="password"
               onChange={handleChange}
@@ -176,35 +145,42 @@ const handleLogin = async (e) => {
             />
             <button
               type="button" 
-              onClick={() => setShowPw(!showPw)}
+              onClick={() => setShowPw1(!showPw1)}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition text-sm"
             >
-              {showPw ? <Eye className="w-4 h-4 text-gray-500" /> : <EyeOff className="w-4 h-4 text-gray-500" />}
+              {showPw1 ? <Eye className="w-4 h-4 text-gray-500" /> : <EyeOff className="w-4 h-4 text-gray-500" />}
             </button>
           </div>
 
-          {/* Options */}
-          <div className="flex items-center justify-between mb-6 mt-1">
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-500">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                className="accent-blue-500 w-3.5 h-3.5 cursor-pointer"
-              />
-              Remember me
-            </label>
-            <button className="text-xs text-blue-500 font-medium hover:underline">
-              <Link to='/resetpw'>Forgot password ?</Link>
+          <p className="text-gray-700 text-sm">Re-enter the new password</p>
+
+          {/* Password 2 */}
+          <div className="relative mb-3">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
+              <LockKeyhole className="w-4 h-4 text-gray-500" />
+            </span>
+            <input
+              type={showPw2 ? "text" : "password"}
+              placeholder="confirm Password"
+              name="confirmPassword"
+              onChange={handleChange}
+              className="shadow-md w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            />
+            <button
+              type="button" 
+              onClick={() => setShowPw2(!showPw2)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition text-sm"
+            >
+              {showPw2 ? <Eye className="w-4 h-4 text-gray-500" /> : <EyeOff className="w-4 h-4 text-gray-500" />}
             </button>
           </div>
 
-          {/* Login button */}
+          
           <button
             className="bg-linear-to-r from-[#162A55] to-[#31A3D5] w-full py-3.5 rounded-xl text-white text-sm font-semibold shadow-lg shadow-blue-400/40  tracking-widest transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 hover:shadow-xl hover:shadow-blue-500"
             type="submit"
           >
-            LOGIN
+            CONFIRM
           </button>
           </form>
         </div>
@@ -214,4 +190,4 @@ const handleLogin = async (e) => {
 }
 
 
-export default Login
+export default ResetPss
