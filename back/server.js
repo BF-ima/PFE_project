@@ -7,6 +7,9 @@ const morgan = require("morgan"); // middleware de journalisation des requêtes 
 const cors = require("cors"); 
 
 const authRoutes = require("./routes/authRoutes");
+const schoolRoutes = require("./routes/schoolRoutes");
+
+
 
 const app = express();
 
@@ -16,10 +19,7 @@ app.use(cookieParser());        // pour lire cookies
 app.use(helmet());              // sécurité headers HTTP
 app.use(morgan("dev"));         // logs des requêtes
 app.use(cors({
-  origin: 'http://localhost:3001', // Your React app
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true
 }));
 
 // limiter les tentatives login
@@ -33,6 +33,7 @@ app.use("/api/auth/login", limiter);
 
 // routes
 app.use("/api/auth", authRoutes); 
+app.use("/api", schoolRoutes);
 
 // route test
 app.get("/", (req, res) => res.send("Backend fonctionne"));

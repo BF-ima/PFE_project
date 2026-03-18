@@ -10,7 +10,10 @@
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-
+const XLSX = require("xlsx");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 /**
  ==============================================================================
@@ -21,8 +24,7 @@ const jwt = require("jsonwebtoken");
 // création JWT
 const generateToken = (user) => { 
   return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
-}; // token containing the user's ID and role, signed with a secret from environment variables, and set to expire in 1 day.
-
+};
 
 // Middleware to check if user is super admin
 const isSuperAdmin = async (userId) => {
@@ -32,7 +34,6 @@ const isSuperAdmin = async (userId) => {
     );
     return users.length > 0 && users[0].role === 'super_admin';
 };
-
 
 /**
  ==============================================================================
@@ -45,15 +46,14 @@ const isSuperAdmin = async (userId) => {
 // -----------------------------------------------------------------------------
 exports.createDefaultSuperAdmin = async (req, res) => {
     try {
-        // Check if any super admin exists
         const [existing] = await db.execute("SELECT id FROM users WHERE role = 'super_admin'");
         if (existing.length > 0) {
             return res.status(400).json({ message: "Un super admin existe déjà" });
         }
         
-        const { email, password, full_name } = req.body;
-        
-        // Default permissions for super admin
+        const { email, password, first_name, last_name } = req.body;
+        const full_name = `${first_name} ${last_name}`;
+
         const defaultPermissions = {
             can_create_admin: true,
             can_create_enseignant: true,
@@ -65,23 +65,19 @@ exports.createDefaultSuperAdmin = async (req, res) => {
             can_assign_permissions: true
         };
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Start transaction
         const connection = await db.getConnection();
         await connection.beginTransaction();
 
         try {
-            // Insert into users table
             const [userResult] = await connection.execute(
-                "INSERT INTO users (email, password, role) VALUES (?, ?, 'super_admin')",
-                [email, hashedPassword] // created_by is null for super admin
+                "INSERT INTO users (first_name, last_name, email, password, role) VALUES (?, ?, ?, ?, 'super_admin')",
+                [first_name, last_name, email, hashedPassword]
             );
 
             const userId = userResult.insertId;
 
-            // Insert into super_admin table
             await connection.execute(
                 "INSERT INTO super_admin (id, full_name, permissions) VALUES (?, ?, ?)",
                 [userId, full_name, JSON.stringify(defaultPermissions)]
@@ -89,9 +85,7 @@ exports.createDefaultSuperAdmin = async (req, res) => {
 
             await connection.commit();
             
-            res.status(201).json({ 
-                message: "Super admin créé avec succès" 
-            });
+            res.status(201).json({ message: "Super admin créé avec succès" });
             
         } catch (error) {
             await connection.rollback();
@@ -102,9 +96,7 @@ exports.createDefaultSuperAdmin = async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ 
-            message: "Erreur serveur lors de la création du super admin" 
-        });
+        res.status(500).json({ message: "Erreur serveur lors de la création du super admin" });
     }
 };
 
@@ -112,74 +104,33 @@ exports.createDefaultSuperAdmin = async (req, res) => {
 // REGISTER - Only super admin can create other users
 // -----------------------------------------------------------------------------
 exports.register = async (req, res) => {
-    // Get the authenticated user (super admin) from the token
-    const token = req.cookies.token;
-   
-    if (!token) { // If no token, user is not authenticated
-        return res.status(401).json({ 
-            message: "Non authentifié" 
-        });
-    }
+    const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+    if (!token) return res.status(401).json({ message: "Non authentifié" });
 
     try {
-        // Verify token and get current user
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const currentUserId = decoded.id;
 
-        // Check if current user is super admin
-        const isSuper = await isSuperAdmin(currentUserId);
-        if (!isSuper) {
-            return res.status(403).json({ 
-                message: "Accès refusé. Seul le super admin peut créer des utilisateurs" 
-            });
+        if (!(await isSuperAdmin(currentUserId))) {
+            return res.status(403).json({ message: "Accès refusé. Seul le super admin peut créer des utilisateurs" });
         }
+          
+        console.log("REGISTER BODY:", req.body);
+        const { first_name, last_name, email, password, role, permissions, specialization, moyenne, speciality_id, promo_id, company_name, contact_person, phone, department } = req.body;
 
-        const { 
-            full_name, 
-            email, 
-            password, 
-            role, 
-            permissions,
-            // Additional fields based on role
-            department,
-            specialization,
-            student_id,
-            classe,
-            company_name,
-            contact_person,
-            phone,
-            address,
-            registration_number
-        } = req.body;
-
-        // Validate role
         const allowedRoles = ['admin', 'enseignant', 'etudiant', 'entreprise'];
         if (!allowedRoles.includes(role)) {
-            return res.status(400).json({ 
-                message: "Rôle invalide" 
-            });
+            return res.status(400).json({ message: "Rôle invalide" });
         }
 
-        // Check if email exists
-        const [existing] = await db.execute(
-            "SELECT id FROM users WHERE email = ?", 
-            [email]
-        );
+        const [existing] = await db.execute("SELECT id FROM users WHERE email = ?", [email]);
         if (existing.length > 0) {
-            return res.status(400).json({ 
-                message: "Email déjà utilisé" 
-            });
+            return res.status(400).json({ message: "Email déjà utilisé" });
         }
 
-        // Get super admin's permissions to validate what they can create
-        const [superAdminData] = await db.execute(
-            "SELECT permissions FROM super_admin WHERE id = ?",
-            [currentUserId]
-        );
-
+        const [superAdminData] = await db.execute("SELECT permissions FROM super_admin WHERE id = ?", [currentUserId]);
         const superAdminPermissions = superAdminData[0].permissions;
 
-        // Check if super admin has permission to create this role
         const permissionMap = {
             'admin': 'can_create_admin',
             'enseignant': 'can_create_enseignant',
@@ -188,72 +139,55 @@ exports.register = async (req, res) => {
         };
 
         if (!superAdminPermissions[permissionMap[role]]) {
-            return res.status(403).json({ 
-                message: `Vous n'avez pas la permission de créer des ${role}s` 
-            });
+            return res.status(403).json({ message: `Vous n'avez pas la permission de créer des ${role}s` });
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Start transaction
         const connection = await db.getConnection();
         await connection.beginTransaction();
 
         try {
-            // Insert into users table
-            const [userResult] = await connection.execute(
-                "INSERT INTO users (email, password, role, created_by) VALUES (?, ?, ?, ?)",
-                [email, hashedPassword, role, currentUserId]
-            );
+          const [userResult] = await connection.execute(
+             "INSERT INTO users (first_name, last_name, email, password, role, phone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              [first_name, last_name, email, hashedPassword, role, phone || null, currentUserId]
+          );
 
-            const userId = userResult.insertId;// Get the new user's ID
+            const userId = userResult.insertId;
 
-            // Insert into role-specific table based on role
             switch (role) {
                 case 'admin':
-                    // For regular admins, super admin can assign specific permissions
-                    await connection.execute(
-                        `INSERT INTO admins 
-                        (id, full_name, permissions, created_by) 
-                        VALUES (?, ?, ?, ?)`,
-                        [userId, full_name, JSON.stringify(permissions || {}), currentUserId]
-                    );
+                    await connection.execute("INSERT INTO administrator (id, permissions) VALUES (?,?)", [userId , JSON.stringify(permissions)]);
                     break;
-
                 case 'enseignant':
-                    await connection.execute(
-                        `INSERT INTO enseignants 
-                        (id, full_name, department, specialization, created_by) 
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [userId, full_name, department, specialization, currentUserId]
-                    );
+                    await connection.execute("INSERT INTO teacher (id, grade) VALUES (?, ?)", [userId, specialization]);
                     break;
-
                 case 'etudiant':
-                    await connection.execute(
-                        `INSERT INTO etudiants 
-                        (id, full_name, student_id, classe, created_by) 
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [userId, full_name, student_id, classe,currentUserId]
+                    // Verify speciality_id exists before inserting
+                    const [specialityCheck] = await connection.execute(
+                    "SELECT id FROM speciality WHERE id = ?", [speciality_id]
                     );
-                    break;
+                   if (speciality_id && specialityCheck.length === 0) {
+                   await connection.rollback();
+                   connection.release();
+                   return res.status(400).json({ message: "Speciality ID invalide — cette spécialité n'existe pas" });
+                   }
 
-                case 'entreprise':
-                    await connection.execute(
-                        `INSERT INTO entreprises 
-                        (id, company_name, contact_person, phone, address, registration_number, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [userId, company_name, contact_person, phone, address, registration_number, currentUserId]
-                    );
+                   await connection.execute(
+                  "INSERT INTO student (id, moyenne, status, graduation_date, speciality_id, promo_id) VALUES (?, ?, ?, ?, ?, ?)",
+                   [userId, moyenne || null, 'ACTIVE', null, speciality_id || null, promo_id || null]
+                  );
                     break;
+                case 'entreprise':
+                   await connection.execute(
+                  "INSERT INTO external_supervisor (id, organization, position, department) VALUES (?, ?, ?, ?)",
+                   [userId, company_name, contact_person, department || null]
+                  );
+                break;
             }
 
             await connection.commit();
-            
-            res.status(201).json({ 
-                message: `${role} créé avec succès par super admin` 
-            });
+            res.status(201).json({ message: `${role} créé avec succès par super admin` });
 
         } catch (error) {
             await connection.rollback();
@@ -264,76 +198,343 @@ exports.register = async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ 
-            message: "Erreur serveur lors de la création" 
-        });
+        res.status(500).json({ message: "Erreur serveur lors de la création" });
     }
 };
+
+// -----------------------------------------------------------------------------
+// REGISTER - with Excel file
+// -----------------------------------------------------------------------------
+exports.importUsersFromExcel = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUserId = decoded.id;
+
+    if (!(await isSuperAdmin(currentUserId))) {
+      return res.status(403).json({ message: "Seul le super admin peut importer" });
+    }
+
+    const file = req.file;
+    if (!file) return res.status(400).json({ message: "Aucun fichier fourni" });
+
+    const role = req.body.role;
+    if (!role) return res.status(400).json({ message: "Rôle manquant" });
+
+    const workbook = XLSX.read(file.buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    // Normalize row keys from Excel headers
+    const normalizeRow = (row) => {
+      const n = {};
+      Object.keys(row).forEach((k) => {
+        const key = k.toLowerCase().trim()
+          .replace(/\s+/g, "").replace(/[-_]/g, "").replace(/[^a-z0-9]/g, "");
+        n[key] = row[k]?.toString().trim() || "";
+      });
+      return {
+        first_name:     n.firstname    || n.fname       || n.first        || "",
+        last_name:      n.lastname     || n.lname       || n.last         || "",
+        email:          n.email        || n.mail        || "",
+        password:       n.password     || n.pass        || n.pwd          || "",
+        phone:          n.phonenumber  || n.phone       || n.tel          || null,
+        permission:     n.permission   || n.role        || n.permissiongiven || null,
+        specialization: n.specialization || n.speciality || n.grade       || null,
+        company_name:   n.companyname  || n.company     || n.organization || null,
+        contact_person: n.contactperson|| n.contact     || n.position     || null,
+        department:     n.department   || n.dept        || null,
+        moyenne:        n.annualaverage|| n.average     || n.avg          || n.moyenne || null,
+        speciality_id:  n.specialityid || n.speciality  || null,
+        promo_id:       n.promoid      || n.promo       || null,
+      };
+    };
+
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      for (const rawRow of rows) {
+        const row = normalizeRow(rawRow);
+
+        if (!row.first_name || !row.last_name || !row.email || !row.password) {
+          throw new Error(`Données manquantes dans une ligne: ${JSON.stringify(rawRow)}`);
+        }
+
+        const hashedPassword = await bcrypt.hash(row.password, 12);
+
+        const [userResult] = await connection.execute(
+          "INSERT INTO users (first_name, last_name, email, password, role, phone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [row.first_name, row.last_name, row.email, hashedPassword, role, row.phone || null, currentUserId]
+        );
+
+        const userId = userResult.insertId;
+
+        switch (role.toLowerCase()) {
+          case "admin":
+            const permissions = row.permission ? { [row.permission]: true } : {};
+            await connection.execute(
+              "INSERT INTO administrator (id, permissions) VALUES (?, ?)",
+              [userId, JSON.stringify(permissions)]
+            );
+            break;
+
+          case "enseignant":
+            await connection.execute(
+              "INSERT INTO teacher (id, grade) VALUES (?, ?)",
+              [userId, row.specialization || null]
+            );
+            break;
+
+          case "etudiant":
+            await connection.execute(
+              "INSERT INTO student (id, moyenne, status, graduation_date, speciality_id, promo_id) VALUES (?, ?, ?, ?, ?, ?)",
+              [userId, row.moyenne || null, "ACTIVE", null, row.speciality_id || null, row.promo_id || null]
+            );
+            break;
+
+          case "entreprise":
+            await connection.execute(
+              "INSERT INTO external_supervisor (id, organization, position, department) VALUES (?, ?, ?, ?)",
+              [userId, row.company_name || null, row.contact_person || null, row.department || null]
+            );
+            break;
+
+          default:
+            console.warn(`Rôle inconnu: ${role}`);
+        }
+      }
+
+      await connection.commit();
+      res.json({ message: "Utilisateurs importés avec succès", count: rows.length });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error("Erreur transaction:", error);
+      res.status(500).json({ message: error.message || "Erreur lors de l'import" });
+    } finally {
+      connection.release();
+    }
+
+  } catch (err) {
+    console.error("Erreur serveur:", err);
+    res.status(500).json({ message: "Erreur serveur lors de l'import Excel" });
+  }
+};
+
+
+
+
+//--------------------------------------------------------------------
+//delete user
+//-------------------------------------------------------------------
+// DELETE user by ID — only super admin can delete
+exports.deleteUser = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUserId = decoded.id;
+
+    if (!(await isSuperAdmin(currentUserId))) {
+      return res.status(403).json({ message: "Accès refusé. Seul le super admin peut supprimer des utilisateurs" });
+    }
+
+    const { id } = req.params;
+
+    // Check user exists and was created by this super admin
+    const [existing] = await db.execute(
+      "SELECT id, role FROM users WHERE id = ? AND created_by = ?",
+      [id, currentUserId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    const role = existing[0].role;
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // Delete from role-specific table first (FK constraint)
+      switch (role) {
+        case 'admin':
+          await connection.execute("DELETE FROM administrator WHERE id = ?", [id]);
+          break;
+        case 'enseignant':
+          await connection.execute("DELETE FROM teacher WHERE id = ?", [id]);
+          break;
+        case 'etudiant':
+          await connection.execute("DELETE FROM student WHERE id = ?", [id]);
+          break;
+        case 'entreprise':
+          await connection.execute("DELETE FROM external_supervisor WHERE id = ?", [id]);
+          break;
+      }
+
+      // Then delete from users table
+      await connection.execute("DELETE FROM users WHERE id = ?", [id]);
+
+      await connection.commit();
+      res.status(200).json({ message: "Utilisateur supprimé avec succès" });
+
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erreur serveur lors de la suppression" });
+  }
+};
+
+
+//-----------------------------------------------------------------------------
+//modify
+//-----------------------------------------------------------------------------
+exports.updateUser = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUserId = decoded.id;
+
+    if (!(await isSuperAdmin(currentUserId))) {
+      return res.status(403).json({ message: "Accès refusé." });
+    }
+
+    const { id } = req.params;
+
+    const [existing] = await db.execute(
+      "SELECT id, role FROM users WHERE id = ? AND created_by = ?",
+      [id, currentUserId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    const role = existing[0].role;
+
+    const {
+      first_name,
+      last_name,
+      email,
+      phone,
+      department,
+      is_active,
+      specialization,
+      moyenne,
+      speciality_id,
+      promo_id,
+      company_name,
+      contact_person,
+    } = req.body;
+
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      await connection.execute(
+       `UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, is_active = ? WHERE id = ?`,
+        [first_name, last_name, email, phone || null, is_active ?? 1, id]
+      );
+
+      // ── phone lives in the role-specific tables ──
+      switch (role) {
+        case 'enseignant':
+          await connection.execute(
+            "UPDATE teacher SET grade = ? WHERE id = ?",
+            [specialization || null, id]
+          );
+          break;
+
+        case 'etudiant':
+          await connection.execute(
+            "UPDATE student SET moyenne = ?, speciality_id = ?, promo_id = ? WHERE id = ?",
+            [moyenne || null, speciality_id || null, promo_id || null, id]
+          );
+          break;
+
+        case 'entreprise':
+    await connection.execute(
+        "UPDATE external_supervisor SET organization = ?, position = ?, department = ? WHERE id = ?",
+        [company_name || null, contact_person || null, department || null, id]
+    );
+    break;
+
+        case 'admin':
+          // nothing extra
+          break;
+      }
+
+      await connection.commit();
+      res.status(200).json({ message: "Utilisateur modifié avec succès" });
+
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erreur serveur lors de la modification" });
+  }
+};
+
+
 
 // -----------------------------------------------------------------------------
 // LOGIN
 // -----------------------------------------------------------------------------
 exports.login = async (req, res) => {
     const { email, password } = req.body;
-    
+
     try {
-        // chercher l'utilisateur
         const [users] = await db.execute("SELECT * FROM users WHERE email = ?", [email]);
         if (users.length === 0) return res.status(400).json({ message: "Email invalide" });
 
         const user = users[0];
-
-        // comparer mot de passe
         const match = await bcrypt.compare(password, user.password);
         if (!match) return res.status(400).json({ message: "Mot de passe invalide" });
 
-        // récupérer profil selon rôle
-        // Login should fetch profile based on role
-
-        
         let profile;
         switch(user.role) {
             case 'super_admin':
-                const [superData] = await db.execute("SELECT * FROM super_admin WHERE id = ?", [user.id]);
-                profile = superData[0];
+                [profile] = await db.execute("SELECT * FROM super_admin WHERE id = ?", [user.id]);
+                profile = profile[0];
                 break;
-            case 'admin':
-                const [adminData] = await db.execute("SELECT * FROM admins WHERE id = ?", [user.id]);
-                profile = adminData[0];
+            case 'administrator':
+                [profile] = await db.execute("SELECT * FROM administrator WHERE id = ?", [user.id]);
+                profile = profile[0];
                 break;
-            case 'enseignant':
-                const [ensData] = await db.execute("SELECT * FROM enseignants WHERE id = ?", [user.id]);
-                profile = ensData[0];
+            case 'teacher':
+                [profile] = await db.execute("SELECT * FROM teacher WHERE id = ?", [user.id]);
+                profile = profile[0];
                 break;
-            case 'etudiant':
-                const [etuData] = await db.execute("SELECT * FROM etudiants WHERE id = ?", [user.id]);
-                profile = etuData[0];
+            case 'student':
+                [profile] = await db.execute("SELECT * FROM student WHERE id = ?", [user.id]);
+                profile = profile[0];
                 break;
-            case 'entreprise':
-                const [entData] = await db.execute("SELECT * FROM entreprises WHERE id = ?", [user.id]);
-                profile = entData[0];
+            case 'enterprise':
+                [profile] = await db.execute("SELECT * FROM external_supervisor WHERE id = ?", [user.id]);
+                profile = profile[0];
                 break;
         }
 
-        // créer token JWT
         const token = generateToken(user);
-
-        // envoyer token dans cookie sécurisé
-        res.cookie("token", token, { 
-            httpOnly: true, 
-            sameSite: "Strict", 
-            secure: true 
-        }); 
-        // httpOnly: true: Cookie cannot be accessed by JavaScript (prevents XSS attacks)  
-        // sameSite: "Strict": Cookie only sent to same site (prevents CSRF attacks)
-        // secure: true: Cookie only sent over HTTPS (prevents man-in-the-middle)
-        
-        res.json({ 
-            message: "Connexion réussie", 
-            role: user.role, 
-            profile,
-            token 
-        });
+        res.cookie("token", token, { httpOnly: true, sameSite: "Strict", secure: true });
+        res.status(200).json({ message: "Connexion réussie", role: user.role, profile, token });
 
     } catch (err) {
         console.error(err);
@@ -345,10 +546,91 @@ exports.login = async (req, res) => {
 // LOGOUT
 // -----------------------------------------------------------------------------
 exports.logout = (req, res) => {
-    res.clearCookie("token"); // "token": Name of cookie to clear
+    res.clearCookie("token");
     res.json({ message: "Déconnexion réussie" });
 };
 
+// -----------------------------------------------------------------------------
+// FORGOT PASSWORD
+// -----------------------------------------------------------------------------
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ message: "Email is required" });
+
+        const [users] = await db.execute("SELECT * FROM users WHERE email = ?", [email]);
+        if (users.length === 0) return res.status(404).json({ message: "User not found" });
+
+        const user = users[0];
+        const token = crypto.randomBytes(32).toString("hex");
+        const expire = new Date(Date.now() + 3600000); // 1 hour
+
+        await db.execute(
+            "UPDATE users SET reset_token = ?, reset_token_expire = ? WHERE id = ?",
+            [token, expire, user.id]
+        );
+
+        const resetLink = `http://localhost:5173/resetpss/${token}`;
+
+        const transporter = nodemailer.createTransport({
+            secure: true,
+            host: "smtp.gmail.com",
+            port: 465,
+            auth: {
+                user: process.env.RESET_PSS_EMAIL,
+                pass: process.env.EMAIL_CODE
+            }
+        });
+
+        transporter.sendMail({
+            to: email,
+            subject: 'Password Reset',
+            html: `<h3>Password Reset</h3><p>Click the link to reset your password:</p><a href="${resetLink}">click here</a>`
+        });
+
+        res.json({ message: "Reset link sent to email" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// -----------------------------------------------------------------------------
+// RESET PASSWORD
+// -----------------------------------------------------------------------------
+exports.resetPassword = async (req, res) => {
+    try {
+        const { token } = req.params;
+        const { password, confirmPassword } = req.body;
+
+        if (!token || !password || !confirmPassword)
+            return res.status(400).json({ message: "All fields are required" });
+
+        if (password !== confirmPassword)
+            return res.status(400).json({ message: "Passwords do not match" });
+
+        const [users] = await db.execute(
+            "SELECT * FROM users WHERE reset_token = ? AND reset_token_expire > NOW()",
+            [token]
+        );
+
+        if (users.length === 0)
+            return res.status(400).json({ message: "Invalid or expired token" });
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await db.execute(
+            "UPDATE users SET password = ?, reset_token = NULL, reset_token_expire = NULL WHERE id = ?",
+            [hashedPassword, users[0].id]
+        );
+
+        res.json({ message: "Password reset successful" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
 
 /**
  ==============================================================================
@@ -359,47 +641,23 @@ exports.logout = (req, res) => {
 // -----------------------------------------------------------------------------
 // Check if user has permission to access another user
 // -----------------------------------------------------------------------------
-exports.canAccessUser = async (requesterId, targetId) => {// requesterId: ID of user making the request, targetId: ID of user being accessed
-    // Super admin can access anyone
-    if (await isSuperAdmin(requesterId)) {
-        return true;
-    }
-    
-    // Check if requester created this user
-    const [target] = await db.execute(
-        "SELECT created_by FROM users WHERE id = ?",
-        [targetId]
-    );
-    
-    if (target[0]?.created_by === requesterId) {
-        return true; // You can access users you created
-    }
-    
-    // Check permissions table
-    const [perms] = await db.execute(
-        "SELECT * FROM user_permissions WHERE user_id = ?",
-        [requesterId]
-    );
-    
+exports.canAccessUser = async (requesterId, targetId) => {
+    if (await isSuperAdmin(requesterId)) return true;
+
+    const [target] = await db.execute("SELECT created_by FROM users WHERE id = ?", [targetId]);
+    if (target[0]?.created_by === requesterId) return true;
+
+    const [perms] = await db.execute("SELECT * FROM user_permissions WHERE user_id = ?", [requesterId]);
     if (perms.length === 0) return false;
-    
-    // Check if they can view all
-    if (perms[0].can_view_all_users) {
-        return true;
-    }
-    
-    // Check allowed list
+
+    if (perms[0].can_view_all_users) return true;
+
     const allowedIds = JSON.parse(perms[0].allowed_user_ids || '[]');
-    if (allowedIds.includes(parseInt(targetId))) {
-        return true;
-    }
-    
-    // Check restrictions
+    if (allowedIds.includes(parseInt(targetId))) return true;
+
     const restrictedIds = JSON.parse(perms[0].restricted_user_ids || '[]');
-    if (restrictedIds.includes(parseInt(targetId))) {
-        return false;
-    }
-    
+    if (restrictedIds.includes(parseInt(targetId))) return false;
+
     return false;
 };
 
@@ -408,16 +666,13 @@ exports.canAccessUser = async (requesterId, targetId) => {// requesterId: ID of 
 // -----------------------------------------------------------------------------
 exports.canViewUser = async (req, res, next) => {
     try {
-        const requesterId = req.userId; // from auth middleware
+        const requesterId = req.userId;
         const targetId = req.params.id;
-        
-        // Use canAccessUser function
-        if (await exports.canAccessUser(requesterId, targetId)) {
-            return next();
-        }
-        
+
+        if (await exports.canAccessUser(requesterId, targetId)) return next();
+
         return res.status(403).json({ message: "Accès refusé" });
-        
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Erreur serveur" });
@@ -433,15 +688,10 @@ exports.assignPermissions = async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
-        // Check if super admin
-        if (!await isSuperAdmin(decoded.id)) {
-            return res.status(403).json({ message: "Accès refusé" });
-        }
+        if (!await isSuperAdmin(decoded.id)) return res.status(403).json({ message: "Accès refusé" });
 
         const { userId, permissions } = req.body;
 
-        // Insert or update permissions
         await db.execute(
             `INSERT INTO user_permissions 
             (user_id, can_create_users, can_create_admin, can_create_enseignant, 
@@ -478,88 +728,67 @@ exports.assignPermissions = async (req, res) => {
     }
 };
 
-
-
-
 // -----------------------------------------------------------------------------
 // Get all users this user can access
 // -----------------------------------------------------------------------------
 exports.getMyUsers = async (req, res) => {
-    try {
-        // 1️⃣ Get current user from token
-        const token = req.cookies.token;
-        if (!token) return res.status(401).json({ message: "Non authentifié" });
+  try {
+    const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+    if (!token) return res.status(401).json({ message: "Non authentifié" });
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
 
-        // 2️⃣ Super admin → see all users
-        if (await isSuperAdmin(userId)) {
-            const [users] = await db.execute(`
-                SELECT u.id, u.email, u.role,
-                       CASE 
-                           WHEN u.role = 'admin' THEN a.full_name
-                           WHEN u.role = 'enseignant' THEN e.full_name
-                           WHEN u.role = 'etudiant' THEN et.full_name
-                           WHEN u.role = 'entreprise' THEN ent.company_name
-                       END as display_name
-                FROM users u
-                LEFT JOIN admins a ON u.id = a.id AND u.role = 'admin'
-                LEFT JOIN enseignants e ON u.id = e.id AND u.role = 'enseignant'
-                LEFT JOIN etudiants et ON u.id = et.id AND u.role = 'etudiant'
-                LEFT JOIN entreprises ent ON u.id = ent.id AND u.role = 'entreprise'
-            `);
-            return res.json({ users });
-        }
+let query = `
+  SELECT u.id, u.first_name, u.last_name, u.email, u.password,
+         u.role, u.is_active, u.created_at, u.created_by,
+         u.reset_token, u.reset_token_expire,
+         u.phone,                                          
+         CONCAT(u.first_name, ' ', u.last_name) AS display_name,
+         t.grade AS specialization,
+         s.moyenne, s.status AS student_status, s.graduation_date, 
+         s.speciality_id, s.promo_id,
+         sp.name AS speciality_name,
+         p.name AS promo_name,
+         e.organization AS company_name, 
+         e.position AS contact_person,
+         e.phone AS external_phone,
+         e.department AS department,
+         a.permissions AS permissions
+  FROM users u
+  LEFT JOIN teacher t ON u.id = t.id
+  LEFT JOIN student s ON u.id = s.id
+  LEFT JOIN speciality sp ON s.speciality_id = sp.id
+  LEFT JOIN promo p ON s.promo_id = p.id
+  LEFT JOIN external_supervisor e ON u.id = e.id
+  LEFT JOIN administrator a ON u.id = a.id
+`;
 
-        // 3️⃣ Load user permissions (allowed_user_ids)
-        const [permsData] = await db.execute(
-            "SELECT * FROM user_permissions WHERE user_id = ?",
-            [userId]
-        );
+    const params = [];
 
-        let allowedIds = [];
-        if (permsData[0]?.allowed_user_ids) {
-            try {
-                allowedIds = JSON.parse(permsData[0].allowed_user_ids);
-            } catch {
-                allowedIds = [];
-            }
-        }
+    // If not super admin → filter by allowed users
+    if (!(await isSuperAdmin(userId))) {
+      const [permsData] = await db.execute("SELECT * FROM user_permissions WHERE user_id = ?", [userId]);
+      let allowedIds = [];
+      if (permsData[0]?.allowed_user_ids) {
+        try { allowedIds = JSON.parse(permsData[0].allowed_user_ids); } catch { allowedIds = []; }
+      }
 
-        // 4️⃣ Build query → only include allowed users
-        let query = `
-            SELECT u.id, u.email, u.role,
-                   CASE 
-                       WHEN u.role = 'admin' THEN a.full_name
-                       WHEN u.role = 'enseignant' THEN e.full_name
-                       WHEN u.role = 'etudiant' THEN et.full_name
-                       WHEN u.role = 'entreprise' THEN ent.company_name
-                   END as display_name
-            FROM users u
-            LEFT JOIN admins a ON u.id = a.id AND u.role = 'admin'
-            LEFT JOIN enseignants e ON u.id = e.id AND u.role = 'enseignant'
-            LEFT JOIN etudiants et ON u.id = et.id AND u.role = 'etudiant'
-            LEFT JOIN entreprises ent ON u.id = ent.id AND u.role = 'entreprise'
-            WHERE 1=1
-        `;
-
-        const params = [];
-
-        if (allowedIds.length > 0) {
-            query += ` AND u.id IN (${allowedIds.map(() => '?').join(',')})`;
-            params.push(...allowedIds);
-        } else {
-            query += ` AND 0`; // no users visible
-        }
-
-        const [users] = await db.execute(query, params);
-        res.json({ users });
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Erreur serveur" });
+      if (allowedIds.length > 0) {
+        query += ` WHERE u.id IN (${allowedIds.map(() => '?').join(',')})`;
+        params.push(...allowedIds);
+      } else {
+        query += ` WHERE 0`;
+      }
     }
+
+    const [users] = await db.execute(query, params);
+    res.json({ users });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
 };
 
 /**

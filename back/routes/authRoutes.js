@@ -3,13 +3,19 @@ const { body, validationResult } = require("express-validator");
 const { 
     createDefaultSuperAdmin,
     register, 
+    importUsersFromExcel,
+    deleteUser,
+    updateUser,
     login, 
     logout,
+    forgotPassword,
+    resetPassword,
     assignPermissions,
     getMyUsers,
     canViewUser 
 } = require("../controllers/authController");
-const { authenticate } = require("../middleware/authMiddleware");
+const authenticate = require("../middleware/authMiddleware");
+const upload = require('../middleware/upload');
 const { checkRole, isSuperAdmin, isAdmin, canAccessUser } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
@@ -46,7 +52,14 @@ router.post(
     login
 );
 
+
+
+router.post('/import', upload.single('file'), importUsersFromExcel);
 router.post("/logout", logout);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
+router.delete('/delete/:id', deleteUser);
+router.put('/update/:id', updateUser);
 
 // ==================== PROTECTED ROUTES ====================
 
@@ -64,9 +77,7 @@ router.post(
         body("password").isLength({ min: 6 }).withMessage("Mot de passe doit contenir au moins 6 caractères"),
         body("role").isIn(['admin', 'enseignant', 'etudiant', 'entreprise']).withMessage("Rôle invalide"),
         body("full_name").notEmpty().withMessage("Nom complet requis"),
-        body("department").if(body("role").equals("enseignant")).notEmpty().withMessage("Département requis"),
-        body("student_id").if(body("role").equals("etudiant")).notEmpty().withMessage("ID étudiant requis"),
-        body("class").if(body("role").equals("etudiant")).notEmpty().withMessage("Classe requise"),
+        body('department').if(body('role').equals('entreprise')).notEmpty().withMessage('Département requis'),
         body("company_name").if(body("role").equals("entreprise")).notEmpty().withMessage("Nom d'entreprise requis")
     ],
     validate,
