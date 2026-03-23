@@ -3,6 +3,8 @@ import AddUserModal from "../layout/AddUserModal";
 import { useNavigate } from "react-router-dom";
 import ImportModal from "../layout/ImportModal.jsx";
 import Sidebar from "../layout/Sidebar.jsx";
+import useCurrentUser from "../hooks/useCurrentUser";
+import { ProfileDropdown } from './supervisor/HomePage'; 
 import {
   ChevronLeft,
   ChevronRight,
@@ -44,135 +46,6 @@ const getPermissionLabel = (permissions) => {
 };
 
 
-
-// ==================== PROFILE DROPDOWN ====================
-
-const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const dropdownRef = useRef(null);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target))
-        setIsOpen(false);
-    };
-    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError("Le nouveau mot de passe doit contenir au moins 6 caractères");
-      return;
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError("Les mots de passe ne correspondent pas");
-      return;
-    }
-    onChangePassword(passwordForm);
-    setPasswordSuccess("Mot de passe modifié avec succès !");
-    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-    setTimeout(() => { setShowPasswordModal(false); setPasswordSuccess(""); }, 2000);
-  };
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
-      >
-        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#18335E] to-[#2D8FBF] flex items-center justify-center text-white font-semibold shadow-sm">
-          {user?.firstName?.[0]}{user?.lastName?.[0]}
-        </div>
-        <span className="text-sm font-medium text-gray-700 hidden md:block">
-          {user?.firstName} {user?.lastName}
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-2">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-sm font-semibold text-gray-900">{user?.firstName} {user?.lastName}</p>
-            <p className="text-xs text-gray-500">{user?.email}</p>
-            <p className="text-xs text-gray-400 mt-1">Rôle: {user?.role}</p>
-          </div>
-          <button
-            onClick={() => { setShowPasswordModal(true); setIsOpen(false); }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-          >
-            <Lock size={16} className="text-gray-500" /> Change Password
-          </button>
-          <button
-            onClick={() => { onLogout(); setIsOpen(false); }}
-            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-          >
-            <LogoutIcon size={16} /> Logout
-          </button>
-        </div>
-      )}
-
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md">
-            <div className="bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Lock size={20} /> Change Password
-              </h3>
-              <button onClick={() => setShowPasswordModal(false)} className="text-white hover:text-gray-200">
-                <X size={24} />
-              </button>
-            </div>
-            <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
-              {passwordSuccess && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{passwordSuccess}</div>
-              )}
-              {passwordError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{passwordError}</div>
-              )}
-              {[
-                { label: "Current Password",     field: "currentPassword" },
-                { label: "New Password",          field: "newPassword" },
-                { label: "Confirm New Password",  field: "confirmPassword" },
-              ].map(({ label, field }) => (
-                <div key={field}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm[field]}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, [field]: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                  />
-                </div>
-              ))}
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setShowPasswordModal(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                  Cancel
-                </button>
-                <button type="submit"
-                  className="px-4 py-2 bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-colors">
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ==================== ACTION MENU ====================
 
@@ -625,10 +498,7 @@ function UserAccountsManage() {
   const [showImportModal,   setShowImportModal]   = useState(false);
   const navigate = useNavigate();
 
-  const [currentUser] = useState({
-    id: 1, firstName: "Admin", lastName: "Principal",
-    email: "admin@esi-sba.dz", role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   const [admins,              setAdmins]              = useState([]);
   const [teachers,            setTeachers]            = useState([]);
@@ -857,7 +727,7 @@ const handleBulkImport = () => {
                   className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]" />
               </div>
               <div className="ml-auto">
-                <ProfileDropdown user={currentUser} onLogout={handleLogout} onChangePassword={handleChangePassword} />
+                <ProfileDropdown user={currentUser} onLogout={handleLogout} />
               </div>
             </div>
           </div>
