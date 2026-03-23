@@ -36,7 +36,7 @@ CREATE TABLE `administrator` (
 
 LOCK TABLES `administrator` WRITE;
 /*!40000 ALTER TABLE `administrator` DISABLE KEYS */;
-INSERT INTO `administrator` VALUES (45,NULL);
+INSERT INTO `administrator` VALUES (53,'{\"can_create_enseignant\": true}'),(54,'{\"Gestion des projets PFE\": true}');
 /*!40000 ALTER TABLE `administrator` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -306,16 +306,18 @@ CREATE TABLE `project` (
   `title` varchar(200) DEFAULT NULL,
   `description` text,
   `max_students` int DEFAULT NULL,
-  `status` enum('PENDING','VALIDATED','ASSIGNED','COMPLETED') DEFAULT NULL,
+  `status` enum('PENDING','VALIDATED','REJECTED','ASSIGNED','COMPLETED') DEFAULT 'PENDING',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `teacher_id` int DEFAULT NULL,
   `external_supervisor_id` int DEFAULT NULL,
+  `approval_comment` text,
+  `rejection_reason` text,
   PRIMARY KEY (`id`),
   KEY `teacher_id` (`teacher_id`),
   KEY `external_supervisor_id` (`external_supervisor_id`),
   CONSTRAINT `project_ibfk_1` FOREIGN KEY (`teacher_id`) REFERENCES `teacher` (`id`),
   CONSTRAINT `project_ibfk_2` FOREIGN KEY (`external_supervisor_id`) REFERENCES `external_supervisor` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -324,6 +326,7 @@ CREATE TABLE `project` (
 
 LOCK TABLES `project` WRITE;
 /*!40000 ALTER TABLE `project` DISABLE KEYS */;
+INSERT INTO `project` VALUES (6,'ai agent','mini projet',4,'VALIDATED','2026-03-22 15:44:51',48,NULL,NULL,NULL),(7,'web app','simple web site ...........',6,'VALIDATED','2026-03-22 17:20:16',48,NULL,NULL,NULL),(8,'mobile app','simple mobile application ......',8,'VALIDATED','2026-03-22 18:09:08',48,NULL,NULL,NULL),(9,'qqqqqqq','..................................................................',4,'VALIDATED','2026-03-22 18:27:23',48,NULL,'qqqqqqqqqq',NULL),(10,'pppppppppppppppppppppp','llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll',8,'PENDING','2026-03-22 18:30:05',48,NULL,NULL,NULL);
 /*!40000 ALTER TABLE `project` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -547,7 +550,7 @@ CREATE TABLE `student` (
 
 LOCK TABLES `student` WRITE;
 /*!40000 ALTER TABLE `student` DISABLE KEYS */;
-INSERT INTO `student` VALUES (33,13.40,'ACTIVE',NULL,3,5),(46,17.00,'ACTIVE',NULL,5,5);
+INSERT INTO `student` VALUES (33,13.40,'ACTIVE',NULL,3,5),(46,17.00,'ACTIVE',NULL,5,5),(65,13.23,'ACTIVE',NULL,1,5);
 /*!40000 ALTER TABLE `student` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -706,7 +709,7 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   KEY `created_by` (`created_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -715,7 +718,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,NULL,NULL,'superadmin@example.com','$2b$12$D9ysqqWC0J7bzOq0C/W/4uvAbg19noTlosJEmhi/Sdsl1neHh0aN6','super_admin',1,'2026-03-12 14:31:12',NULL,'5a82cbcc43882f00880c2a3e230db83ffb0e842a90bbe3e553c8b76640972d1e','2026-03-12 16:23:48',NULL),(4,'asmaa','babeker','a.babeker@esi-sba.dz','$2b$12$eGEZBvbL6viBU/o8QfSqhO8q9FzXSwDJijfYFm82Dj3/KJHpvshHK','enseignant',1,'2026-03-13 01:08:57',1,NULL,NULL,'0671188221'),(5,'wafaa','rahmoune','w.rahmoune@esi-sba.dz','$2b$12$qA3HgBcKTHBxARzJ8mULq.Y.MKUj36ZLIJp4VUOLHmub.0fE3ooK.','enseignant',1,'2026-03-13 01:26:45',1,NULL,NULL,'0612233445'),(33,'radjaa','turki','r.turki@esi-sba.dz','$2b$12$iiRbDM4Uz0UeUfVa7pKjLejBcxzlxGfqm/m0SfNfjZQbKV4M5yD7W','etudiant',1,'2026-03-13 16:05:34',1,NULL,NULL,'0675757575'),(34,'omar','sahnoun','o.sahnoun@esi-sba.dz','$2b$12$2xM09PRDT0lz4vUSo4Xqje4yA6iE5fvbAvRZMjeXHiaQwnGzTes1q','entreprise',1,'2026-03-13 16:07:16',1,NULL,NULL,'0565656565'),(39,'ahlem','ahlem','ahlem@esi-sba.dz','$2b$12$NRMKjREb1OXSUs2My8NYhO0HWIm29rdPxN8AtW4i9Ozg1n4EvXSzK','enseignant',1,'2026-03-13 16:23:01',1,NULL,NULL,'070909898'),(45,'admin','admin','admin@esi-sba.dz','$2b$12$FL2MxmlZtfKT/zXC.IeDwOlXn5s4CIEMRmrW5lRx8mYngJOB2wD4K','admin',1,'2026-03-13 16:41:31',1,NULL,NULL,'067656565'),(46,'marwa','marwa','marwa@esi-sba.dz','$2b$12$TKL5oOZ44sFGbkX9Bi6Fr.dXWgFBvfWaI.NedemSYyWeMp5dSG6q6','etudiant',1,'2026-03-13 16:42:51',1,NULL,NULL,'0787878787'),(48,'soumia','slimane turki','s.slimaneturki@esi-sba.dz','$2b$10$GH1KcU01nwEvH4j/0KSLpu4sfuCVX./DIISTuTv1VoGQrvCKSRxC6','enseignant',1,'2026-03-13 16:45:19',1,NULL,NULL,'0676655443');
+INSERT INTO `users` VALUES (1,NULL,NULL,'superadmin@example.com','$2b$12$D9ysqqWC0J7bzOq0C/W/4uvAbg19noTlosJEmhi/Sdsl1neHh0aN6','super_admin',1,'2026-03-12 14:31:12',NULL,'5a82cbcc43882f00880c2a3e230db83ffb0e842a90bbe3e553c8b76640972d1e','2026-03-12 16:23:48',NULL),(4,'asmaa','babeker','a.babeker@esi-sba.dz','$2b$12$eGEZBvbL6viBU/o8QfSqhO8q9FzXSwDJijfYFm82Dj3/KJHpvshHK','enseignant',1,'2026-03-13 01:08:57',1,NULL,NULL,'0671188221'),(5,'wafaa','rahmoune','w.rahmoune@esi-sba.dz','$2b$12$qA3HgBcKTHBxARzJ8mULq.Y.MKUj36ZLIJp4VUOLHmub.0fE3ooK.','enseignant',1,'2026-03-13 01:26:45',1,NULL,NULL,'0612233445'),(33,'radjaa','turki','r.turki@esi-sba.dz','$2b$12$iiRbDM4Uz0UeUfVa7pKjLejBcxzlxGfqm/m0SfNfjZQbKV4M5yD7W','etudiant',1,'2026-03-13 16:05:34',1,NULL,NULL,'0675757575'),(34,'omar','sahnoun','o.sahnoun@esi-sba.dz','$2b$12$2xM09PRDT0lz4vUSo4Xqje4yA6iE5fvbAvRZMjeXHiaQwnGzTes1q','entreprise',1,'2026-03-13 16:07:16',1,NULL,NULL,'0565656565'),(39,'ahlem','ahlem','ahlem@esi-sba.dz','$2b$12$NRMKjREb1OXSUs2My8NYhO0HWIm29rdPxN8AtW4i9Ozg1n4EvXSzK','enseignant',1,'2026-03-13 16:23:01',1,NULL,NULL,'070909898'),(46,'marwa','marwa','marwa@esi-sba.dz','$2b$12$TKL5oOZ44sFGbkX9Bi6Fr.dXWgFBvfWaI.NedemSYyWeMp5dSG6q6','etudiant',1,'2026-03-13 16:42:51',1,NULL,NULL,'0787878787'),(48,'soumia','slimane turki','s.slimaneturki@esi-sba.dz','$2b$10$GH1KcU01nwEvH4j/0KSLpu4sfuCVX./DIISTuTv1VoGQrvCKSRxC6','enseignant',1,'2026-03-13 16:45:19',1,'5de8352b68f5c40427b2f80d044167c66e743133cc8c8e28d7ab174c454fc574','2026-03-18 00:46:53','0676655443'),(53,'xxxxx','xxxxxxxxx','cbb@esi-sba.dz','$2b$12$KHNCnHaj3OeJDi8G5L2/.uleGFh6W2m3O5yaG66o.J8eHJZ2AxfWO','admin',1,'2026-03-15 02:39:12',1,NULL,NULL,'xxxxxxxxxxx'),(54,'souzi','souzi','souzi@esi-sba.dz','$2b$12$KcSrBrhVkKDuBZ8U/8y9vu1LdrjmgtAhYV4S00pxDtyFkXevIzIJ6','admin',1,'2026-03-15 03:05:26',1,NULL,NULL,'787898980'),(65,'soumi','soumi','soumi@esi-sba.dz','$2b$12$ORYIn9eMEtbqFDfiOlj8KuHCsrS3GBcMgXwAOeCi890QpvlGPY68O','etudiant',1,'2026-03-17 23:09:31',1,NULL,NULL,'787898980');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -758,4 +761,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-15  2:38:15
+-- Dump completed on 2026-03-22 18:39:25

@@ -10,8 +10,10 @@ const {
     logout,
     forgotPassword,
     resetPassword,
+    changePassword,
     assignPermissions,
     getMyUsers,
+    getMe,
     canViewUser 
 } = require("../controllers/authController");
 const authenticate = require("../middleware/authMiddleware");
@@ -58,8 +60,10 @@ router.post('/import', upload.single('file'), importUsersFromExcel);
 router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
+router.put("/change-password", changePassword);
 router.delete('/delete/:id', deleteUser);
 router.put('/update/:id', updateUser);
+router.get("/me", getMe);
 
 // ==================== PROTECTED ROUTES ====================
 

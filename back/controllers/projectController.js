@@ -1,0 +1,288 @@
+const db  = require("../config/db");
+const jwt = require("jsonwebtoken");
+
+// Helper — get supervisor info from token
+const getSupervisorFromToken = async (token) => {
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const [users] = await db.execute(
+    "SELECT id, role FROM users WHERE id = ?",
+    [decoded.id]
+  );
+  if (users.length === 0) throw new Error("Utilisateur non trouvé");
+  const user = users[0];
+  if (user.role !== "enseignant" && user.role !== "entreprise") {
+    throw new Error("Accès refusé. Seuls les superviseurs peuvent créer des projets");
+  }
+  return user;
+};
+
+// -----------------------------------------------------------------------------
+// CREATE PROJECT
+// -----------------------------------------------------------------------------
+exports.createProject = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const supervisor = await getSupervisorFromToken(token);
+    const { title, max_students, description } = req.body;
+
+    if (!title || !max_students) {
+      return res.status(400).json({ message: "Titre et nombre max d'étudiants sont requis" });
+    }
+
+    // Set teacher_id or external_supervisor_id based on role
+    const teacher_id            = supervisor.role === "enseignant"  ? supervisor.id : null;
+    const external_supervisor_id = supervisor.role === "entreprise" ? supervisor.id : null;
+
+    const [result] = await db.execute(
+      `INSERT INTO project 
+        (title, description, max_students, status, teacher_id, external_supervisor_id, created_at)
+       VALUES (?, ?, ?, 'PENDING', ?, ?, NOW())`,
+      [
+        title,
+        description    || null,
+        parseInt(max_students),
+        teacher_id,
+        external_supervisor_id,
+      ]
+    );
+
+    res.status(201).json({
+      message:   "Projet créé avec succès",
+      projectId: result.insertId,
+    });
+
+  } catch (err) {
+    console.error("createProject error:", err);
+    if (err.message.includes("Accès refusé")) {
+      return res.status(403).json({ message: err.message });
+    }
+    res.status(500).json({ message: "Erreur serveur lors de la création du projet" });
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET MY PROJECTS (for the logged-in supervisor)
+// -----------------------------------------------------------------------------
+exports.getMyProjects = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const supervisor = await getSupervisorFromToken(token);
+
+    let query;
+    if (supervisor.role === "enseignant") {
+      query = `
+        SELECT id, title, status, created_at, max_students, description
+        FROM project
+        WHERE teacher_id = ?
+        ORDER BY created_at DESC
+      `;
+    } else {
+      query = `
+        SELECT id, title, status, created_at, max_students, description
+        FROM project
+        WHERE external_supervisor_id = ?
+        ORDER BY created_at DESC
+      `;
+    }
+
+    const [projects] = await db.execute(query, [supervisor.id]);
+    res.json({ projects });
+
+  } catch (err) {
+    console.error("getMyProjects error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET SINGLE PROJECT
+// -----------------------------------------------------------------------------
+exports.getProjectById = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const { id } = req.params;
+
+    const [projects] = await db.execute(
+      `SELECT p.*,
+              CONCAT(t.first_name, ' ', t.last_name)  AS teacher_name,
+              t.email                                   AS teacher_email,
+              t.phone                                   AS teacher_phone,
+              CONCAT(e.first_name, ' ', e.last_name)  AS external_supervisor_name,
+              e.email                                   AS external_supervisor_email,
+              e.phone                                   AS external_supervisor_phone
+       FROM project p
+       LEFT JOIN users t ON p.teacher_id             = t.id
+       LEFT JOIN users e ON p.external_supervisor_id = e.id
+       WHERE p.id = ?`,
+      [id]
+    );
+
+    if (projects.length === 0) {
+      return res.status(404).json({ message: "Projet non trouvé" });
+    }
+
+    res.json({ project: projects[0] });
+
+  } catch (err) {
+    console.error("getProjectById error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// -----------------------------------------------------------------------------
+// DELETE PROJECT
+// -----------------------------------------------------------------------------
+exports.deleteProject = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const supervisor = await getSupervisorFromToken(token);
+    const { id } = req.params;
+
+    const whereClause = supervisor.role === "enseignant"
+      ? "id = ? AND teacher_id = ?"
+      : "id = ? AND external_supervisor_id = ?";
+
+    const [existing] = await db.execute(
+      `SELECT id FROM project WHERE ${whereClause}`,
+      [id, supervisor.id]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ message: "Projet non trouvé ou accès refusé" });
+    }
+
+    await db.execute("DELETE FROM project WHERE id = ?", [id]);
+    res.json({ message: "Projet supprimé avec succès" });
+
+  } catch (err) {
+    console.error("deleteProject error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+// -----------------------------------------------------------------------------
+// UPDATE PROJECT
+// -----------------------------------------------------------------------------
+exports.updateProject = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const supervisor = await getSupervisorFromToken(token);
+    const { id }     = req.params;
+    const { title, max_students, description } = req.body;
+
+    if (!title || !max_students) {
+      return res.status(400).json({ message: "Titre et nombre max d'étudiants sont requis" });
+    }
+
+    // Check project belongs to this supervisor
+    const whereClause = supervisor.role === "enseignant"
+      ? "id = ? AND teacher_id = ?"
+      : "id = ? AND external_supervisor_id = ?";
+
+    const [existing] = await db.execute(
+      `SELECT id FROM project WHERE ${whereClause}`,
+      [id, supervisor.id]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ message: "Projet non trouvé ou accès refusé" });
+    }
+
+    await db.execute(
+      `UPDATE project SET title = ?, description = ?, max_students = ? WHERE id = ?`,
+      [title, description || null, parseInt(max_students), id]
+    );
+
+    res.json({ message: "Projet modifié avec succès" });
+
+  } catch (err) {
+    console.error("updateProject error:", err);
+    if (err.message.includes("Accès refusé")) {
+      return res.status(403).json({ message: err.message });
+    }
+    res.status(500).json({ message: "Erreur serveur lors de la modification" });
+  }
+};
+
+
+// -----------------------------------------------------------------------------
+// GET ALL PROJECTS (for admin dashboard)
+// -----------------------------------------------------------------------------
+exports.getAllProjects = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const [projects] = await db.execute(
+      `SELECT p.*,
+              CONCAT(t.first_name, ' ', t.last_name) AS teacher_name,
+              CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name
+       FROM project p
+       LEFT JOIN users t ON p.teacher_id             = t.id
+       LEFT JOIN users e ON p.external_supervisor_id = e.id
+       ORDER BY p.created_at DESC`
+    );
+    res.json({ projects });
+
+  } catch (err) {
+    console.error("getAllProjects error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// -----------------------------------------------------------------------------
+// UPDATE PROJECT STATUS (approve / reject)
+// -----------------------------------------------------------------------------
+exports.updateProjectStatus = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const { id }                    = req.params;
+    const { status, comment, reason } = req.body;
+
+    const allowed = ["PENDING", "VALIDATED", "REJECTED", "ASSIGNED", "COMPLETED"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: "Statut invalide" });
+    }
+
+    const [existing] = await db.execute("SELECT id FROM project WHERE id = ?", [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ message: "Projet non trouvé" });
+    }
+
+    if (status === "VALIDATED") {
+      await db.execute(
+        "UPDATE project SET status = ?, approval_comment = ? WHERE id = ?",
+        [status, comment || null, id]
+      );
+    } else if (status === "REJECTED") {
+      await db.execute(
+        "UPDATE project SET status = ?, rejection_reason = ? WHERE id = ?",
+        [status, reason || null, id]
+      );
+    } else {
+      await db.execute(
+        "UPDATE project SET status = ? WHERE id = ?",
+        [status, id]
+      );
+    }
+
+    res.json({ message: "Statut mis à jour avec succès" });
+
+  } catch (err) {
+    console.error("updateProjectStatus error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};

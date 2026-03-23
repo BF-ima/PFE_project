@@ -8,6 +8,7 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const schoolRoutes = require("./routes/schoolRoutes");
+const projectRoutes = require("./routes/projectRoutes");
 
 
 
@@ -34,6 +35,7 @@ app.use("/api/auth/login", limiter);
 // routes
 app.use("/api/auth", authRoutes); 
 app.use("/api", schoolRoutes);
+app.use("/api/projects", projectRoutes);
 
 // route test
 app.get("/", (req, res) => res.send("Backend fonctionne"));

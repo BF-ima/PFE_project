@@ -791,6 +791,97 @@ let query = `
   }
 };
 
+
+// -----------------------------------------------------------------------------
+// GET CURRENT USER INFO
+// -----------------------------------------------------------------------------
+exports.getMe = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const [users] = await db.execute(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.phone
+       FROM users u
+       WHERE u.id = ?`,
+      [decoded.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    const user = users[0];
+    res.json({
+      id:        user.id,
+      firstName: user.first_name,
+      lastName:  user.last_name,
+      email:     user.email,
+      role:      user.role,
+      phone:     user.phone,
+    });
+
+  } catch (err) {
+    console.error("getMe error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+// -----------------------------------------------------------------------------
+// CHANGE PASSWORD
+// -----------------------------------------------------------------------------
+exports.changePassword = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId  = decoded.id;
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Tous les champs sont requis" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "Le nouveau mot de passe doit contenir au moins 6 caractères" });
+    }
+
+    // Get current user
+    const [users] = await db.execute(
+      "SELECT id, password FROM users WHERE id = ?",
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    // Check current password is correct
+    const isMatch = await bcrypt.compare(currentPassword, users[0].password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Mot de passe actuel incorrect" });
+    }
+
+    // Hash and save new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await db.execute(
+      "UPDATE users SET password = ? WHERE id = ?",
+      [hashedPassword, userId]
+    );
+
+    res.json({ message: "Mot de passe modifié avec succès" });
+
+  } catch (err) {
+    console.error("changePassword error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
 /**
  ==============================================================================
  * END OF CONTROLLER
