@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../layout/Sidebar";
-import { ProfileDropdown } from './supervisor/HomePage'; 
+import { ProfileDropdown } from './supervisor/HomePage';
+import ProjectInfoModal from '../layout/ProjectInfoModal';
 import {
   Search,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal,
   User,
-  Lock,
-  LogOut as LogoutIcon,
   X,
   Calendar,
   Check,
@@ -21,8 +19,12 @@ import useCurrentUser from "../hooks/useCurrentUser";
 
 
 // ==================== StatCard ====================
-const StatCard = ({ icon, label, count, color }) => (
-  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 flex items-center gap-4 flex-1">
+const StatCard = ({ icon, label, count, color, onClick, isActive }) => (
+  <div
+    onClick={onClick}
+    className={`bg-white rounded-xl p-5 shadow-sm border flex items-center gap-4 flex-1 cursor-pointer transition-all duration-200
+      ${isActive ? 'border-gray-300' : 'border-gray-200 hover:shadow-md'}`}
+  >
     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${color}`}>
       {icon}
     </div>
@@ -136,15 +138,19 @@ const RejectModal = ({ project, onConfirm, onClose }) => {
 };
 
 // ==================== ProjectCard ====================
-const ProjectCard = ({ project, onApprove, onReject }) => {
+const ProjectCard = ({ project, onApprove, onReject, onInfo }) => {
   const formatDate     = (d) => d ? new Date(d).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB");
   const supervisorName = project.teacher_name || project.external_supervisor_name || "Supervisor";
+  const isPending      = project.status === "PENDING";
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 flex flex-col gap-3">
+    <div
+      onClick={() => onInfo(project)}
+      className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col gap-3 cursor-pointer"
+    >
       <div>
-        <h3 className="text-base font-semibold text-gray-800 mb-1">{project.title}</h3>
-        <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+        <h3 className="text-base font-semibold text-gray-800 mb-1 break-words">{project.title}</h3>
+        <p className="text-sm text-gray-500 mt-1 line-clamp-2 break-words">
           {project.description || "No description provided"}
         </p>
       </div>
@@ -160,20 +166,23 @@ const ProjectCard = ({ project, onApprove, onReject }) => {
         </div>
       </div>
 
-      <div className="flex gap-2 mt-1">
-        <button
-          onClick={() => onApprove(project)}
-          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors"
-        >
-          <Check size={13} /> Approve
-        </button>
-        <button
-          onClick={() => onReject(project)}
-          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors"
-        >
-          <X size={13} /> Reject
-        </button>
-      </div>
+      {/* Approve / Reject buttons only for pending — stop propagation so card click doesn't fire */}
+      {isPending && (
+        <div className="flex gap-2 mt-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onApprove(project); }}
+            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <Check size={13} /> Approve
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onReject(project); }}
+            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <X size={13} /> Reject
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -207,8 +216,10 @@ function ProjectDashboard() {
   const [projects,         setProjects]         = useState([]);
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState('');
+  const [activeFilter,     setActiveFilter]     = useState("PENDING");
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal,  setShowRejectModal]  = useState(false);
+  const [showInfoModal,    setShowInfoModal]    = useState(false);
   const [selectedProject,  setSelectedProject]  = useState(null);
   const navigate = useNavigate();
 
@@ -247,43 +258,55 @@ function ProjectDashboard() {
     setShowRejectModal(true);
   };
 
-// ── Confirm approve ──
-const handleApproveConfirm = async (comment) => {
-  try {
-    const token = localStorage.getItem("token");
-    const res   = await fetch(`http://localhost:3000/api/projects/${selectedProject.id}/status`, {
-      method:  "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body:    JSON.stringify({ status: "VALIDATED", comment }),
-    });
-    if (res.ok) {
-      setProjects(prev => prev.map(p =>
-        p.id === selectedProject.id ? { ...p, status: "VALIDATED" } : p
-      ));
-      setShowApproveModal(false);
-      setSelectedProject(null);
-    }
-  } catch (err) { console.error("approve error:", err); }
-};
+  const handleInfoClick = (project) => {
+    setSelectedProject(project);
+    setShowInfoModal(true);
+  };
 
-// ── Confirm reject ──
-const handleRejectConfirm = async (reason) => {
-  try {
-    const token = localStorage.getItem("token");
-    const res   = await fetch(`http://localhost:3000/api/projects/${selectedProject.id}/status`, {
-      method:  "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body:    JSON.stringify({ status: "REJECTED", reason }),
-    });
-    if (res.ok) {
-      setProjects(prev => prev.map(p =>
-        p.id === selectedProject.id ? { ...p, status: "REJECTED" } : p
-      ));
-      setShowRejectModal(false);
-      setSelectedProject(null);
-    }
-  } catch (err) { console.error("reject error:", err); }
-};
+  // ── Handle filter change ──
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    setCurrentPage(1);
+    setSearchQuery("");
+  };
+
+  // ── Confirm approve ──
+  const handleApproveConfirm = async (comment) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch(`http://localhost:3000/api/projects/${selectedProject.id}/status`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ status: "VALIDATED", comment }),
+      });
+      if (res.ok) {
+        setProjects(prev => prev.map(p =>
+          p.id === selectedProject.id ? { ...p, status: "VALIDATED" } : p
+        ));
+        setShowApproveModal(false);
+        setSelectedProject(null);
+      }
+    } catch (err) { console.error("approve error:", err); }
+  };
+
+  // ── Confirm reject ──
+  const handleRejectConfirm = async (reason) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch(`http://localhost:3000/api/projects/${selectedProject.id}/status`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ status: "REJECTED", reason }),
+      });
+      if (res.ok) {
+        setProjects(prev => prev.map(p =>
+          p.id === selectedProject.id ? { ...p, status: "REJECTED" } : p
+        ));
+        setShowRejectModal(false);
+        setSelectedProject(null);
+      }
+    } catch (err) { console.error("reject error:", err); }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -291,31 +314,61 @@ const handleRejectConfirm = async (reason) => {
     navigate("/login");
   };
 
+  // ── State helpers ──
+  const getStateColor = (state) => {
+    switch (state?.toUpperCase()) {
+      case 'VALIDATED': return 'bg-green-100 text-green-700';
+      case 'REJECTED':  return 'bg-red-100 text-red-700';
+      case 'PENDING':   return 'bg-yellow-100 text-yellow-700';
+      case 'ASSIGNED':  return 'bg-blue-100 text-blue-700';
+      case 'COMPLETED': return 'bg-gray-100 text-gray-700';
+      default:          return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStateText = (state) => {
+    switch (state?.toUpperCase()) {
+      case 'VALIDATED': return 'Validated';
+      case 'REJECTED':  return 'Rejected';
+      case 'PENDING':   return 'Pending';
+      case 'ASSIGNED':  return 'Assigned';
+      case 'COMPLETED': return 'Completed';
+      default:          return state || 'N/A';
+    }
+  };
 
   // ── Stats ──
   const pendingCount  = projects.filter(p => p.status === "PENDING").length;
   const approvedCount = projects.filter(p => p.status === "VALIDATED").length;
   const rejectedCount = projects.filter(p => p.status === "REJECTED").length;
 
-  // ── Filter only PENDING + search ──
-  const pendingProjects   = projects.filter(p => p.status === "PENDING");
-  const filteredProjects  = pendingProjects.filter(p =>
-    p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.teacher_name || p.external_supervisor_name || "")
-      .toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // ── Filter by activeFilter + search ──
+  const filteredProjects = projects
+    .filter(p => p.status === activeFilter)
+    .filter(p =>
+      p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.teacher_name || p.external_supervisor_name || "")
+        .toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const projectsPerPage   = 6;
   const totalPages        = Math.max(1, Math.ceil(filteredProjects.length / projectsPerPage));
   const startIndex        = (currentPage - 1) * projectsPerPage;
   const paginatedProjects = filteredProjects.slice(startIndex, startIndex + projectsPerPage);
 
+  // ── Section title ──
+  const sectionTitle = {
+    PENDING:   "Proposal Review and Approval",
+    VALIDATED: "Approved Projects",
+    REJECTED:  "Rejected Projects",
+  }[activeFilter];
+
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
       <Sidebar />
       <div className="flex-1 flex flex-col">
 
-        {/* ==================== HEADER (your original) ==================== */}
+        {/* ==================== HEADER ==================== */}
         <header className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -347,16 +400,29 @@ const handleRejectConfirm = async (reason) => {
         {/* ==================== MAIN ==================== */}
         <main className="flex-1 p-8 overflow-auto">
 
-          <h2 className="text-lg font-semibold text-[#1e3a5f] mb-4">
-            Proposal Review and approval
-          </h2>
-
           {/* Stat Cards */}
           <div className="flex gap-4 mb-8">
-            <StatCard icon={<Clock size={22} className="text-yellow-500" />}     label="Pending"  count={pendingCount}  color="bg-yellow-50" />
-            <StatCard icon={<CheckCircle size={22} className="text-green-500" />} label="Approved" count={approvedCount} color="bg-green-50"  />
-            <StatCard icon={<XCircle size={22} className="text-red-500" />}       label="Rejected" count={rejectedCount} color="bg-red-50"    />
+            <StatCard
+              icon={<Clock size={22} className="text-yellow-500" />}
+              label="Pending" count={pendingCount} color="bg-yellow-50"
+              onClick={() => handleFilterChange("PENDING")}
+              isActive={activeFilter === "PENDING"}
+            />
+            <StatCard
+              icon={<CheckCircle size={22} className="text-green-500" />}
+              label="Approved" count={approvedCount} color="bg-green-50"
+              onClick={() => handleFilterChange("VALIDATED")}
+              isActive={activeFilter === "VALIDATED"}
+            />
+            <StatCard
+              icon={<XCircle size={22} className="text-red-500" />}
+              label="Rejected" count={rejectedCount} color="bg-red-50"
+              onClick={() => handleFilterChange("REJECTED")}
+              isActive={activeFilter === "REJECTED"}
+            />
           </div>
+
+          <h2 className="text-lg font-semibold text-[#1e3a5f] mb-4">{sectionTitle}</h2>
 
           {/* Loading */}
           {loading && (
@@ -380,12 +446,15 @@ const handleRejectConfirm = async (reason) => {
                     project={project}
                     onApprove={handleApproveClick}
                     onReject={handleRejectClick}
+                    onInfo={handleInfoClick}
                   />
                 ))}
               </div>
 
               {filteredProjects.length === 0 && (
-                <div className="text-center py-12 text-gray-500">No pending projects found</div>
+                <div className="text-center py-12 text-gray-500">
+                  No {activeFilter.toLowerCase()} projects found
+                </div>
               )}
 
               {totalPages > 1 && (
@@ -416,6 +485,15 @@ const handleRejectConfirm = async (reason) => {
           onClose={() => { setShowRejectModal(false); setSelectedProject(null); }}
         />
       )}
+
+      {/* Modal project info */}
+      <ProjectInfoModal
+        isOpen={showInfoModal}
+        onClose={() => { setShowInfoModal(false); setSelectedProject(null); }}
+        project={selectedProject}
+        getStateColor={getStateColor}
+        getStateText={getStateText}
+      />
     </div>
   );
 }

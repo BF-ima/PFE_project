@@ -140,12 +140,12 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
                 <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
                   <h3 className="text-base font-medium text-gray-800 text-center">Details</h3>
                 </div>
-                <div className="p-5 space-y-5">
+                <div className="p-5 space-y-5 overflow-y-auto max-h-64">
 
                   {/* Description */}
                   <div>
                     <p className="text-xs font-medium text-gray-500 mb-2">Description</p>
-                    <p className="text-sm text-gray-700 leading-relaxed">
+                    <p className="text-sm text-gray-700 leading-relaxed break-words">
                       {fullProject.description || 'No description provided'}
                     </p>
                   </div>
