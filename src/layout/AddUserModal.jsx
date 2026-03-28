@@ -1,8 +1,14 @@
 import React, { useState } from "react";
 import { X } from "lucide-react";
 
-// Composant Modal Form
-const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
+// ✅ Props: s = liste depuis Academic Entities
+const AddUserModal = ({
+  isOpen,
+  onClose,
+  userType,
+  onAdd,
+  specializations = [],
+}) => {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -13,8 +19,8 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
     confirmPassword: "",
     // Champs spécifiques
     permission: "", // Admin
-    specialization: "", // Supervisor
-    major: "", // Student
+    specialization: "", // ✅ Teacher / External Supervisor
+    major: "", // ✅ Student
     annualAverage: "", // Student
   });
 
@@ -29,7 +35,6 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
 
     // ✅ Validation email : @esi-sba.dz requis SAUF pour superviseur externe
     const isExternalSupervisor = userType === "externalSupervisor";
-
     if (!isExternalSupervisor && !formData.email.endsWith("@esi-sba.dz")) {
       alert("L'email doit se terminer par @esi-sba.dz");
       return;
@@ -37,13 +42,12 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
 
     // Créer le nom complet
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-
     if (!fullName || !formData.email || !formData.username) {
       alert("Erreur: Données utilisateur invalides");
       return;
     }
 
-    // Créer l'objet utilisateur avec le champ name
+    // ✅ Créer l'objet utilisateur avec champs distincts
     const newUser = {
       id: Date.now(),
       name: fullName,
@@ -54,11 +58,14 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
       password: formData.password,
       status: "Active",
       lastActive: new Date().toISOString().split("T")[0],
+
       // Champs spécifiques selon le type
       ...(userType === "admin" && {
         role: formData.permission,
         phoneNumber: formData.phoneNumber,
       }),
+
+      // ✅ Teacher/External Supervisor → specialization
       ...(userType === "teacher" && {
         specialization: formData.specialization,
         phoneNumber: formData.phoneNumber,
@@ -68,6 +75,7 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
         phoneNumber: formData.phoneNumber,
       }),
 
+      // ✅ Student → major
       ...(userType === "student" && {
         major: formData.major,
         annualAverage: formData.annualAverage,
@@ -119,31 +127,62 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
   );
 
   const getSelectField = (label, value, onChange, options, required = true) => (
-    <div className="flex items-center gap-4 mb-3">
-      <label className="w-32 text-sm font-medium text-gray-700 text-right">
+    <div className="flex items-start gap-4 mb-3">
+      <label className="w-32 text-sm font-medium text-gray-700 text-right pt-2">
         {label} : {required && <span className="text-red-500">*</span>}
       </label>
-      <select
-        value={value}
-        onChange={onChange}
-        required={required}
-        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <option value="">Sélectionner...</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
+      <div className="flex-1 relative">
+        <select
+          value={value}
+          onChange={onChange}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent bg-white text-gray-700 appearance-none cursor-pointer"
+        >
+          <option value="" disabled hidden>
+            Sélectionner...
           </option>
-        ))}
-      </select>
+          {options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+        {/* Flèche personnalisée */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </div>
+      </div>
     </div>
   );
+
+  // ✅ Liste des noms de spécialités (sans formatage)
+  const specializationNames =
+    specializations.length > 0
+      ? specializations.map((spec) => spec.name)
+      : [
+          "Génie Logiciel",
+          "Systèmes d'Information",
+          "Réseaux & Sécurité",
+          "Internet des Objets",
+        ];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-linear-to-r from-blue-800 to-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-lg">
+        <div className="bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-lg">
           <h2 className="text-xl font-semibold">
             Add a new{" "}
             {userType === "admin"
@@ -178,7 +217,7 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
                 setFormData({ ...formData, lastName: e.target.value }),
               )}
 
-              {/* Champs spécifiques selon le type */}
+              {/* ✅ Admin - Permissions */}
               {userType === "admin" && (
                 <>
                   {getSelectField(
@@ -201,16 +240,18 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
                 </>
               )}
 
+              {/* ✅ Teacher - Specialization (terme original) */}
               {userType === "teacher" && (
                 <>
-                  {getInputField(
-                    "Specialization",
+                  {getSelectField(
+                    "Specialization *",
                     formData.specialization,
                     (e) =>
                       setFormData({
                         ...formData,
                         specialization: e.target.value,
                       }),
+                    specializationNames,
                   )}
                   {getInputField("Phone number", formData.phoneNumber, (e) =>
                     setFormData({ ...formData, phoneNumber: e.target.value }),
@@ -218,6 +259,7 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
                 </>
               )}
 
+              {/* ✅ External Supervisor - Specialization */}
               {userType === "externalSupervisor" && (
                 <>
                   {getInputField("Phone number", formData.phoneNumber, (e) =>
@@ -226,10 +268,14 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
                 </>
               )}
 
+              {/* ✅ Student - Major (terme original) */}
               {userType === "student" && (
                 <>
-                  {getInputField("Major", formData.major, (e) =>
-                    setFormData({ ...formData, major: e.target.value }),
+                  {getSelectField(
+                    "Major *",
+                    formData.major,
+                    (e) => setFormData({ ...formData, major: e.target.value }),
+                    specializationNames,
                   )}
                   {getInputField(
                     "Annual average",
@@ -258,7 +304,6 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
                 "email",
                 true,
               )}
-
               {getInputField("Username", formData.username, (e) =>
                 setFormData({ ...formData, username: e.target.value }),
               )}
@@ -297,7 +342,7 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd }) => {
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-linear-to-r from-blue-800 to-blue-600 text-white rounded-md hover:from-blue-700 hover:to-blue-500 transition-colors"
+              className="px-6 py-2 bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-md hover:from-blue-700 hover:to-blue-500 transition-colors"
             >
               Add
             </button>

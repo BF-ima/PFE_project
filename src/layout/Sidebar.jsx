@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutGrid, UserRoundCog, UsersRound, MessageCircle, Bell, 
+  LayoutGrid, UserRoundCog, UsersRound, MessageCircle, Bell, GraduationCap,
   Building2, FileCheckCorner, ChartColumn, 
 } from 'lucide-react';
 
@@ -9,11 +9,12 @@ import {
 export const MENU_ITEMS = [
   { icon: LayoutGrid, path: '/projectsdashboard', label: 'Dashboard' },
   { icon: UserRoundCog, path: '/accountsmanage', label: 'User Accounts Management' },
-  { icon: UsersRound, path: '/studentteams', label: 'StudentTeams' },
-  { icon: MessageCircle, path: '/chat', label: 'Chat' },
+  { icon: UsersRound, path: '/teamsallocation', label: 'Manage Teams & Project Choices' },
+  { icon: MessageCircle, path: '/messaging', label: 'Messaging' },
   { icon: Bell, path: '/notifications', label: 'Notifications' },
-  { icon: Building2, path: '/academicentitymanagement', label: 'Academic Entity Management' },
-  { icon: FileCheckCorner, path: '/proposalreviewandapproval', label: 'Proposal Review & Approval' },
+  { icon: Building2, path: '/academicentitymanage', label: 'Academic Entity Management' },
+  { icon: FileCheckCorner, path: '/proposalreview', label: 'Proposal Review' },
+  { icon: GraduationCap, path: '/defense-manage', label: 'Defense Management' },
   { icon: ChartColumn, path: '/statistics', label: 'Statistics' },
 ];
 

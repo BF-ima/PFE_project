@@ -1,222 +1,29 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../layout/Sidebar";
+import ProfileDropdown from "./ProfileDropDown";
+import ProjectInfoModel from "../layout/ProjectInfoModel";
 import {
   Search,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
   User,
-  Lock,
-  LogOut as LogoutIcon,
-  X,
   Calendar,
 } from "lucide-react";
 
-// ==================== Composant ProfileDropdown ====================
-export const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const dropdownRef = useRef(null);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
-
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError(
-        "Le nouveau mot de passe doit contenir au moins 6 caractères",
-      );
-      return;
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError("Les mots de passe ne correspondent pas");
-      return;
-    }
-    onChangePassword(passwordForm);
-    setPasswordSuccess("Mot de passe modifié avec succès !");
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setTimeout(() => {
-      setShowPasswordModal(false);
-      setPasswordSuccess("");
-    }, 2000);
-  };
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
-      >
-        <div className="w-10 h-10 rounded-full bg-linear-to-r from-[#18335E] to-[#2D8FBF] flex items-center justify-center text-white font-semibold shadow-sm">
-          {user?.firstName?.[0]}
-          {user?.lastName?.[0]}
-        </div>
-        <span className="text-sm font-medium text-gray-700 hidden md:block">
-          {user?.firstName} {user?.lastName}
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-2">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-sm font-semibold text-gray-900">
-              {user?.firstName} {user?.lastName}
-            </p>
-            <p className="text-xs text-gray-500">{user?.email}</p>
-            <p className="text-xs text-gray-400 mt-1">Rôle: {user?.role}</p>
-          </div>
-          <button
-            onClick={() => {
-              setShowPasswordModal(true);
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-          >
-            <Lock size={16} className="text-gray-500" /> Change Password
-          </button>
-          <button
-            onClick={() => {
-              onLogout();
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-          >
-            <LogoutIcon size={16} /> Logout
-          </button>
-        </div>
-      )}
-
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md">
-            <div className="bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Lock size={20} /> Change Password
-              </h3>
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="text-white hover:text-gray-200"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
-              {passwordSuccess && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-                  {passwordSuccess}
-                </div>
-              )}
-              {passwordError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {passwordError}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.currentPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      currentPassword: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={passwordForm.newPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      newPassword: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-colors"
-                >
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ==================== COMPOSANTS EXISTANTS ====================
-export const ProjectCard = ({ project }) => (
-  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-gray-300">
+// ==================== COMPOSANTS Projectcard ====================
+export const ProjectCard = ({ project, onClick }) => (
+  <div
+    onClick={() => onClick(project)}
+    className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:cursor-pointer hover:shadow-md transition-all duration-200 hover:border-gray-300"
+  >
     <div className="space-y-4">
       {/* Project Name */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Name</h3>
-        <p className="text-sm text-gray-600 line-clamp-2">{project.name}</p>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          {project.name}
+        </h3>
       </div>
 
       {/* Summary */}
@@ -238,41 +45,58 @@ export const ProjectCard = ({ project }) => (
     </div>
   </div>
 );
-
+// ==================== COMPOSANT Pagination ====================
 export const Pagination = ({ currentPage, totalPages, onPageChange }) => (
-  <div className="flex items-center justify-center gap-2 mt-8">
+  <div className="flex items-center justify-center gap-3 mt-8">
+    {/* Previous button */}
     <button
       onClick={() => onPageChange(currentPage - 1)}
       disabled={currentPage === 1}
-      className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+      className="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-200 text-[#1e3a5f] font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
     >
-      <ChevronLeft size={16} />
+      &lt;
     </button>
+
+    {/* First page */}
     <button
       onClick={() => onPageChange(1)}
-      className={`w-8 h-8 flex items-center justify-center rounded border ${currentPage === 1 ? "bg-[#1e3a5f] text-white border-[#1e3a5f]" : "border-gray-300 hover:bg-gray-50"}`}
+      className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm border font-medium transition-all ${
+        currentPage === 1
+          ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+          : "bg-white text-[#1e3a5f] border-gray-200 hover:bg-gray-50"
+      }`}
     >
       1
     </button>
+
+    {/* Ellipsis if more than 2 pages */}
     {totalPages > 2 && (
-      <button className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50">
-        <MoreHorizontal size={16} />
-      </button>
+      <div className="w-12 h-12 flex items-center justify-center text-gray-400">
+        ...
+      </div>
     )}
+
+    {/* Last page */}
     {totalPages > 1 && (
       <button
         onClick={() => onPageChange(totalPages)}
-        className={`w-8 h-8 flex items-center justify-center rounded border ${currentPage === totalPages ? "bg-[#1e3a5f] text-white border-[#1e3a5f]" : "border-gray-300 hover:bg-gray-50"}`}
+        className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm border font-medium transition-all ${
+          currentPage === totalPages
+            ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+            : "bg-white text-[#1e3a5f] border-gray-200 hover:bg-gray-50"
+        }`}
       >
         {totalPages}
       </button>
     )}
+
+    {/* Next button */}
     <button
       onClick={() => onPageChange(currentPage + 1)}
       disabled={currentPage === totalPages}
-      className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+      className="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-200 text-[#1e3a5f] font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
     >
-      <ChevronRight size={16} />
+      &gt;
     </button>
   </div>
 );
@@ -282,6 +106,9 @@ function ProjectDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
+  // Ajoutez ces lignes dans ProjectDashboard, avec vos autres useState :
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [currentUser] = useState({
     id: 1,
@@ -350,6 +177,27 @@ function ProjectDashboard() {
       state: "En cours",
       summary: "Intégration d'un assistant virtuel pour le support client",
     },
+    {
+      id: 9,
+      name: "Chatbot IA",
+      supervisor: "Nicolas Blanc",
+      state: "En cours",
+      summary: "Intégration d'un assistant virtuel pour le support client",
+    },
+    {
+      id: 10,
+      name: "Chatbot IA",
+      supervisor: "Nicolas Blanc",
+      state: "En cours",
+      summary: "Intégration d'un assistant virtuel pour le support client",
+    },
+    {
+      id: 11,
+      name: "Chatbot IA",
+      supervisor: "Nicolas Blanc",
+      state: "En cours",
+      summary: "Intégration d'un assistant virtuel pour le support client",
+    },
   ]);
 
   const filteredProjects = projects.filter(
@@ -366,6 +214,14 @@ function ProjectDashboard() {
     startIndex,
     startIndex + projectsPerPage,
   );
+  const handleProjectClick = (project) => {
+    setSelectedProject(project);
+    setIsModalOpen(true);
+  };
+  const handleCloseModel = () => {
+    setIsModalOpen(false);
+    setTimeout(() => setSelectedProject(null), 300);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -375,7 +231,15 @@ function ProjectDashboard() {
   const handleChangePassword = (formData) => {
     console.log("🔐 Changement de mot de passe:", formData);
   };
-
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === "Escape" && isModalOpen) {
+        handleCloseModel();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isModalOpen]);
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
       <Sidebar />
@@ -423,30 +287,45 @@ function ProjectDashboard() {
 
         {/* Main Content */}
         <main className="flex-1 p-8 overflow-auto">
-          {/* Projects Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedProjects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          )}
-
-          {/* No Results */}
-          {filteredProjects.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <p className="text-lg">Aucun projet trouvé</p>
+          <div className="p-8 min-h-full flex flex-col">
+            {/* Projects Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {paginatedProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onClick={handleProjectClick}
+                />
+              ))}
             </div>
-          )}
+
+            {/* No Results */}
+            {filteredProjects.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                <p className="text-lg">Aucun projet trouvé</p>
+              </div>
+            )}
+
+            <div className="mt-auto pt-8">
+              {totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              )}
+            </div>
+          </div>
         </main>
       </div>
+      {/* Project Info Modal */}
+      {isModalOpen && (
+        <ProjectInfoModel
+          project={selectedProject}
+          onClose={handleCloseModel}
+          onClick={handleProjectClick}
+        />
+      )}
     </div>
   );
 }

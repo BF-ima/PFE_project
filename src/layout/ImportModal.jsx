@@ -28,7 +28,6 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
       { key: "email", label: "E-mail", required: true, type: "email" },
       { key: "username", label: "Username", required: true },
       { key: "password", label: "Password", required: true, type: "password" },
-      { key: "status", label: "Status", required: false, default: "Pending" },
     ];
 
     const specific = {
@@ -126,6 +125,88 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
     return mappings[normalized] || normalized;
   };
 
+  // ✅ Valeurs valides pour les rôles (Admin)
+  const VALID_ROLES = [
+    "Gestion Des Comptes Supervisor Et Student",
+    "Gestion des Projets PFE",
+    "Gestion des Attributions",
+    "Gestion des Soutenances",
+    "Gestion des Notes et Résultats",
+    "Configuration Système et Communication",
+  ];
+
+  // ✅ Valeurs valides pour les spécialités (à récupérer depuis Academic Entities)
+  const VALID_SPECIALIZATIONS = [
+    "Génie Logiciel",
+    "Systèmes d'Information",
+    "Réseaux & Sécurité",
+    "Internet des Objets",
+    "Intelligence Artificielle",
+    "Data Science",
+    "Cloud Computing",
+  ];
+
+  // ✅ Normaliser les rôles (accepter variations)
+  const normalizeRole = (role) => {
+    if (!role) return "";
+    const normalized = role.toLowerCase().trim();
+
+    const roleMappings = {
+      "gestion des comptes supervisor et student":
+        "Gestion Des Comptes Supervisor Et Student",
+      "gestion des comptes": "Gestion Des Comptes Supervisor Et Student",
+      comptes: "Gestion Des Comptes Supervisor Et Student",
+      "gestion des projets pfe": "Gestion des Projets PFE",
+      "projets pfe": "Gestion des Projets PFE",
+      pfe: "Gestion des Projets PFE",
+      "gestion des attributions": "Gestion des Attributions",
+      attributions: "Gestion des Attributions",
+      "gestion des soutenances": "Gestion des Soutenances",
+      soutenances: "Gestion des Soutenances",
+      "gestion des notes et résultats": "Gestion des Notes et Résultats",
+      notes: "Gestion des Notes et Résultats",
+      "configuration système et communication":
+        "Configuration Système et Communication",
+      configuration: "Configuration Système et Communication",
+      système: "Configuration Système et Communication",
+    };
+
+    return roleMappings[normalized] || role;
+  };
+
+  // ✅ Normaliser les spécialités
+  const normalizeSpecialization = (spec) => {
+    if (!spec) return "";
+    const normalized = spec.toLowerCase().trim();
+
+    const specMappings = {
+      "génie logiciel": "Génie Logiciel",
+      gl: "Génie Logiciel",
+      "software engineering": "Génie Logiciel",
+      "systèmes d'information": "Systèmes d'Information",
+      si: "Systèmes d'Information",
+      "information systems": "Systèmes d'Information",
+      "réseaux & sécurité": "Réseaux & Sécurité",
+      "réseaux et sécurité": "Réseaux & Sécurité",
+      rs: "Réseaux & Sécurité",
+      "network security": "Réseaux & Sécurité",
+      "internet des objets": "Internet des Objets",
+      iot: "Internet des Objets",
+      "intelligence artificielle": "Intelligence Artificielle",
+      ia: "Intelligence Artificielle",
+      ai: "Intelligence Artificielle",
+      "artificial intelligence": "Intelligence Artificielle",
+      "data science": "Data Science",
+      ds: "Data Science",
+      "cloud computing": "Cloud Computing",
+      cloud: "Cloud Computing",
+    };
+
+    return (
+      specMappings[normalized] || spec.charAt(0).toUpperCase() + spec.slice(1)
+    );
+  };
+
   // Parser le fichier Excel/CSV (inchangé)
   const parseFile = (file) => {
     return new Promise((resolve, reject) => {
@@ -146,7 +227,6 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
     });
   };
 
-  // ✅ Valider une ligne de données (avec validation email spécifique)
   const validateRow = (row, rowIndex) => {
     const errors = [];
     const fields = getRequiredFields();
@@ -158,7 +238,7 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
         errors.push(`Ligne ${rowIndex + 2}: "${field.label}" est requis`);
       }
 
-      // ✅ Validation email : @esi-sba.dz requis SAUF pour externalSupervisor
+      // ✅ Validation email
       if (field.type === "email" && value) {
         const isExternalSupervisor = userType === "externalSupervisor";
         if (!isExternalSupervisor && !value.endsWith("@esi-sba.dz")) {
@@ -171,7 +251,27 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
         }
       }
 
-      // Validation password (minimum 6 caractères)
+      // ✅ Validation des rôles (Admin)
+      if (field.key === "role" && value) {
+        const normalizedRole = normalizeRole(value);
+        if (!VALID_ROLES.includes(normalizedRole)) {
+          errors.push(
+            `Ligne ${rowIndex + 2}: Rôle invalide "${value}". Valeurs acceptées: ${VALID_ROLES.join(", ")}`,
+          );
+        }
+      }
+
+      // ✅ Validation des spécialités (Teacher/Student)
+      if (field.key === "specialization" && value) {
+        const normalizedSpec = normalizeSpecialization(value);
+        if (!VALID_SPECIALIZATIONS.includes(normalizedSpec)) {
+          errors.push(
+            `Ligne ${rowIndex + 2}: Spécialité invalide "${value}". Valeurs acceptées: ${VALID_SPECIALIZATIONS.join(", ")}`,
+          );
+        }
+      }
+
+      // Validation password
       if (field.type === "password" && value && value.toString().length < 6) {
         errors.push(
           `Ligne ${rowIndex + 2}: Mot de passe trop court (min. 6 caractères)`,
@@ -287,22 +387,26 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
           username: getValue("username"),
           phoneNumber: getValue("phoneNumber"),
           password: getValue("password"),
-          status: getValue("status", "Pending"),
+
+          // ✅ STATUS TOUJOURS "Active" - ignoré depuis Excel
+          status: "Active",
+
           lastActive: today,
-          // ✅ Champs spécifiques mis à jour
+
+          // ✅ Normalisation des rôles et spécialités
           ...(userType === "admin" && {
-            role: getValue("role"),
+            role: normalizeRole(getValue("role")),
             phoneNumber: getValue("phoneNumber"),
           }),
           ...(userType === "teacher" && {
-            specialization: getValue("specialization"),
+            specialization: normalizeSpecialization(getValue("specialization")),
             phoneNumber: getValue("phoneNumber"),
           }),
           ...(userType === "externalSupervisor" && {
             phoneNumber: getValue("phoneNumber"),
           }),
           ...(userType === "student" && {
-            major: getValue("major"),
+            major: normalizeSpecialization(getValue("major")),
             annualAverage: getValue("annualAverage")
               ? parseFloat(getValue("annualAverage"))
               : "",
@@ -323,7 +427,9 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
 
   // ✅ Télécharger le modèle Excel (mis à jour)
   const downloadTemplate = () => {
-    const fields = getRequiredFields();
+    const fields = getRequiredFields(); // ✅ Ne contient plus "status"
+
+    // Feuille 1 : Template principal
     const template = [
       Object.fromEntries(
         fields.map((f) => [f.label, f.required ? "*Obligatoire" : ""]),
@@ -341,14 +447,13 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
             ];
           if (f.key === "username") return [f.label, "j.dupont"];
           if (f.key === "password") return [f.label, "MotDePasse123"];
-          if (f.key === "status") return [f.label, "Pending"];
           if (f.key === "phoneNumber") return [f.label, "+33612345678"];
           if (userType === "admin" && f.key === "role")
             return [f.label, "Gestion des Projets PFE"];
           if (userType === "teacher" && f.key === "specialization")
-            return [f.label, "Computer Science"];
+            return [f.label, "Génie Logiciel"];
           if (userType === "student" && f.key === "major")
-            return [f.label, "Computer Science"];
+            return [f.label, "Génie Logiciel"];
           if (userType === "student" && f.key === "annualAverage")
             return [f.label, "15.5"];
           return [f.label, ""];
@@ -362,11 +467,47 @@ const ImportModal = ({ isOpen, onClose, userType, onImport }) => {
     }));
     worksheet["!cols"] = colWidths;
 
+    // ✅ Feuille 2 : Valeurs valides (inchangée)
+    const validValuesSheet = [];
+    if (userType === "admin") {
+      validValuesSheet.push(
+        { "Valeurs valides pour 'Permission Given'": "" },
+        { "": "Gestion Des Comptes Supervisor Et Student" },
+        { "": "Gestion des Projets PFE" },
+        { "": "Gestion des Attributions" },
+        { "": "Gestion des Soutenances" },
+        { "": "Gestion des Notes et Résultats" },
+        { "": "Configuration Système et Communication" },
+      );
+    }
+    if (userType === "teacher" || userType === "student") {
+      validValuesSheet.push(
+        { "Valeurs valides pour 'Specialization/Major'": "" },
+        { "": "Génie Logiciel" },
+        { "": "Systèmes d'Information" },
+        { "": "Réseaux & Sécurité" },
+        { "": "Internet des Objets" },
+        { "": "Intelligence Artificielle" },
+        { "": "Data Science" },
+        { "": "Cloud Computing" },
+      );
+    }
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+
+    if (validValuesSheet.length > 0) {
+      const validValuesWorksheet = XLSX.utils.json_to_sheet(validValuesSheet);
+      validValuesWorksheet["!cols"] = [{ wch: 50 }];
+      XLSX.utils.book_append_sheet(
+        workbook,
+        validValuesWorksheet,
+        "Valeurs_Valides",
+      );
+    }
+
     XLSX.writeFile(workbook, `template_import_${userType}.xlsx`);
   };
-
   // ✅ Labels mis à jour
   const userTypeLabel =
     {

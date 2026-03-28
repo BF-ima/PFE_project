@@ -3,6 +3,9 @@ import AddUserModal from "../layout/AddUserModal";
 import { useNavigate } from "react-router-dom";
 import ImportModal from "../layout/ImportModal.jsx";
 import Sidebar from "../layout/Sidebar.jsx";
+import ProfileDropdown from "./ProfileDropDown.jsx";
+import DeleteConfirmModal from "../layout/DeleteConfirmModal.jsx";
+import { createPortal } from "react-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,272 +18,101 @@ import {
   Edit2,
   Trash2,
   Upload,
-  Lock,
-  LogOut as LogoutIcon,
 } from "lucide-react";
-
-const ProfileDropdown = ({ user, onLogout, onChangePassword }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const dropdownRef = useRef(null);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-
-  // Fermer le dropdown quand on clique à l'extérieur
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  // Gestion du changement de mot de passe
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
-
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError(
-        "Le nouveau mot de passe doit contenir au moins 6 caractères",
-      );
-      return;
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError("Les mots de passe ne correspondent pas");
-      return;
-    }
-    onChangePassword(passwordForm);
-    setPasswordSuccess("Mot de passe modifié avec succès !");
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setTimeout(() => {
-      setShowPasswordModal(false);
-      setPasswordSuccess("");
-    }, 2000);
-  };
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      {/* Avatar profil */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
-      >
-        <div className="w-10 h-10 rounded-full bg-linear-to-r from-[#18335E] to-[#2D8FBF] flex items-center justify-center text-white font-semibold shadow-sm">
-          {user?.firstName?.[0]}
-          {user?.lastName?.[0]}
-        </div>
-        <span className="text-sm font-medium text-gray-700 hidden md:block">
-          {user?.firstName} {user?.lastName}
-        </span>
-      </button>
-
-      {/* Dropdown menu */}
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-2">
-          {/* Infos profil */}
-          <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-sm font-semibold text-gray-900">
-              {user?.firstName} {user?.lastName}
-            </p>
-            <p className="text-xs text-gray-500">{user?.email}</p>
-            <p className="text-xs text-gray-400 mt-1">Rôle: {user?.role}</p>
-          </div>
-
-          {/* Actions */}
-
-          <button
-            onClick={() => {
-              setShowPasswordModal(true);
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-          >
-            <Lock size={16} className="text-gray-500" />
-            Change Password
-          </button>
-          <button
-            onClick={() => {
-              onLogout();
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-          >
-            <LogoutIcon size={16} />
-            Logout
-          </button>
-        </div>
-      )}
-
-      {/* Modal Changement de mot de passe */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md">
-            <div className="bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Lock size={20} /> Change Password
-              </h3>
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="text-white hover:text-gray-200"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
-              {passwordSuccess && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-                  {passwordSuccess}
-                </div>
-              )}
-              {passwordError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {passwordError}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.currentPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      currentPassword: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={passwordForm.newPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      newPassword: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-colors"
-                >
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ==================== COMPOSANTS OPTIMISÉS ====================
 
 const ActionMenu = ({ user, onView, onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef(null);
 
+  const toggleMenu = () => {
+    if (!isOpen) {
+      const rect = buttonRef.current.getBoundingClientRect();
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const menuHeight = 150;
+
+      const top =
+        spaceBelow > menuHeight
+          ? rect.bottom + window.scrollY
+          : rect.top + window.scrollY - menuHeight;
+
+      setPosition({
+        top,
+        left: rect.right - 180, // largeur menu
+      });
+    }
+
+    setIsOpen(!isOpen);
+  };
+
+  // 🔒 fermer si clic ailleurs
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    const handleClickOutside = (e) => {
+      if (!buttonRef.current?.contains(e.target)) {
         setIsOpen(false);
       }
     };
+
     if (isOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <>
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+        ref={buttonRef}
+        onClick={toggleMenu}
+        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
       >
         <MoreVertical size={18} />
       </button>
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1">
-          <button
-            onClick={() => {
-              onView(user);
-              setIsOpen(false);
+
+      {isOpen &&
+        createPortal(
+          <div
+            style={{
+              position: "absolute",
+              top: position.top,
+              left: position.left,
             }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+            className="w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] py-1 animate-fadeIn"
           >
-            <Eye size={16} className="text-gray-500" /> More Information
-          </button>
-          <button
-            onClick={() => {
-              onEdit(user);
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-          >
-            <Edit2 size={16} className="text-gray-500" /> Modify
-          </button>
-          <button
-            onClick={() => {
-              onDelete(user);
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-          >
-            <Trash2 size={16} /> Delete
-          </button>
-        </div>
-      )}
-    </div>
+            <button
+              onClick={() => {
+                onView(user);
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            >
+              <Eye size={16} /> More Information
+            </button>
+
+            <button
+              onClick={() => {
+                onEdit(user);
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            >
+              <Edit2 size={16} /> Modify
+            </button>
+
+            <button
+              onClick={() => {
+                onDelete(user);
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+            >
+              <Trash2 size={16} /> Delete
+            </button>
+          </div>,
+          document.body
+        )}
+    </>
   );
 };
 
@@ -356,7 +188,7 @@ const UserInfoModal = ({ user, userType, onClose }) => {
                 <p className="mt-1 text-gray-900">{user?.role || "N/A"}</p>
               </div>
             )}
-            {(userType === "teacher" || userType === "externalSupervisor") && (
+            {(userType === "teacher") && (
               <div>
                 <label className="text-sm font-medium text-gray-500">
                   Specialization
@@ -575,7 +407,7 @@ const ModifyUserModal = ({ user, userType, onSave, onClose }) => {
                 </select>
               </div>
             )}
-            {(userType === "teacher" || userType === "externalSupervisor") && (
+            {(userType === "teacher" ) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Specialization
@@ -752,7 +584,7 @@ const UserTable = ({
           item?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (userType === "admin"
             ? item?.role?.toLowerCase().includes(searchQuery.toLowerCase())
-            : userType === "externalSupervisor" || userType === "teacher"
+            : userType === "teacher"
               ? item?.specialization
                   ?.toLowerCase()
                   .includes(searchQuery.toLowerCase())
@@ -775,7 +607,6 @@ const UserTable = ({
           </>
         );
       case "teacher":
-      case "externalSupervisor":
         return (
           <>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -804,13 +635,12 @@ const UserTable = ({
           </td>
         );
       case "teacher":
-      case "externalSupervisor":
         return (
-          <>
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-              Specialization
-            </th>
-          </>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span className="text-sm text-gray-600">
+              {item?.specialization}
+            </span>
+          </td>
         );
       case "student":
         return (
@@ -848,9 +678,6 @@ const UserTable = ({
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Last Active day
               </th>
-              <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                Actions
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -869,17 +696,19 @@ const UserTable = ({
                   <StatusBadge status={item?.status} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-600">
-                    {formatDate(item?.lastActive)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <ActionMenu
-                    user={item}
-                    onView={onView}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">
+                      {formatDate(item?.lastActive)}
+                    </span>
+                    <div className="ml-4">
+                      <ActionMenu
+                        user={item}
+                        onView={onView}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                      />
+                    </div>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -914,6 +743,8 @@ function UserManagement() {
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const navigate = useNavigate();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
 
   const [currentUser] = useState({
     id: 1,
@@ -972,7 +803,6 @@ function UserManagement() {
       firstName: "Ahmed",
       lastName: "Benali",
       email: "ahmed.benali@external-univ.edu",
-      specialization: "Artificial Intelligence",
       status: "Active",
       lastActive: "2024-01-15",
       phoneNumber: "+33612345678",
@@ -1074,16 +904,27 @@ function UserManagement() {
     setShowModifyModal(true);
   };
   const handleDeleteUser = (user) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${user.name} ?`)) {
-      if (currentView === "admin")
-        setAdmins((prev) => prev.filter((u) => u.id !== user.id));
-      else if (currentView === "teacher")
-        setTeachers((prev) => prev.filter((u) => u.id !== user.id));
-      else if (currentView === "externalSupervisor")
-        setExternalSupervisors((prev) => prev.filter((u) => u.id !== user.id));
-      else setStudents((prev) => prev.filter((u) => u.id !== user.id));
-    }
+    setUserToDelete(user);
+    setShowDeleteModal(true);
   };
+  // pour confirmer la suppression
+  const confirmDeleteUser = () => {
+    if (!userToDelete) return;
+
+    if (currentView === "admin")
+      setAdmins((prev) => prev.filter((u) => u.id !== userToDelete.id));
+    else if (currentView === "teacher")
+      setTeachers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+    else if (currentView === "externalSupervisor")
+      setExternalSupervisors((prev) =>
+        prev.filter((u) => u.id !== userToDelete.id),
+      );
+    else setStudents((prev) => prev.filter((u) => u.id !== userToDelete.id));
+
+    setShowDeleteModal(false);
+    setUserToDelete(null);
+  };
+
   const handleSaveUser = (updatedUser) => {
     // ✅ Validation email : @esi-sba.dz requis SAUF pour superviseur externe
     const isExternalSupervisor = currentView === "externalSupervisor";
@@ -1167,27 +1008,30 @@ function UserManagement() {
       student: students,
     })[currentView] || [];
 
+  // ✅ Navigation clavier : flèches gauche/droite
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignorer si l'utilisateur tape dans un input/textarea
+      if (
+        e.target.tagName === "INPUT" ||
+        e.target.tagName === "TEXTAREA" ||
+        e.target.isContentEditable
+      ) {
+        return;
+      }
 
-    // ✅ Navigation clavier : flèches gauche/droite
-useEffect(() => {
-  const handleKeyDown = (e) => {
-    // Ignorer si l'utilisateur tape dans un input/textarea
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-      return;
-    }
-    
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      handleNextView();
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      handlePrevView();
-    }
-  };
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        handleNextView();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        handlePrevView();
+      }
+    };
 
-  window.addEventListener('keydown', handleKeyDown);
-  return () => window.removeEventListener('keydown', handleKeyDown);
-}, [currentView, handleNextView, handlePrevView]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentView, handleNextView, handlePrevView]);
 
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
@@ -1298,6 +1142,18 @@ useEffect(() => {
           onClose={() => setShowImportModal(false)}
           userType={currentView}
           onImport={handleBulkImport}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          user={userToDelete}
+          userType={currentView}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setUserToDelete(null);
+          }}
+          onConfirm={confirmDeleteUser}
         />
       )}
 
