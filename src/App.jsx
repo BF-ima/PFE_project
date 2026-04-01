@@ -12,6 +12,8 @@ import ProjectsPage from './component/supervisor/ProjectsPage.jsx'
 import AddProjectPage from './component/supervisor/AddProjectPage';
 import ModifyProjectPage from './component/supervisor/ModifyProjectPage';
 import TeamsPage from './component/supervisor/TeamsPage';
+import TeamManagementPage from './component/student/TeamManagementPage';
+import Notifications from './component/student/Notifications';
 
 
 
@@ -28,9 +30,11 @@ function App() {
         <Route index path='student/firstpage' element={<FirstPage />} /> {/*Student session */}
         <Route index path='supervisor/homepage' element={<HomePage />} />  {/*Supervisor session */}
         <Route index path='supervisor/projectspage' element={<ProjectsPage />} /> {/*Supervisor session */}
-        <Route path='supervisor/addprojectpage' element={<AddProjectPage />} />
-        <Route path='supervisor/modifyprojectpage' element={<ModifyProjectPage />} />
-        <Route path='supervisor/teamspage' element={<TeamsPage />} />
+        <Route index path='supervisor/addprojectpage' element={<AddProjectPage />} />
+        <Route index path='supervisor/modifyprojectpage' element={<ModifyProjectPage />} />
+        <Route index path='supervisor/teamspage' element={<TeamsPage />} />
+        <Route index path='student/TeamManagementPage' element={<TeamManagementPage />} />
+        <Route index path='student/notifications' element={<Notifications />} />
       </Routes>
     </>
   )
