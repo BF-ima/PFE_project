@@ -36,7 +36,9 @@ CREATE TABLE `administrator` (
 
 LOCK TABLES `administrator` WRITE;
 /*!40000 ALTER TABLE `administrator` DISABLE KEYS */;
-INSERT INTO `administrator` VALUES (53,'{\"can_create_enseignant\": true}'),(54,'{\"Gestion des projets PFE\": true}');
+INSERT INTO `administrator` VALUES
+(10,'{\"can_create_enseignant\": true, \"can_create_etudiant\": true}'),
+(11,'{\"can_create_etudiant\": true, \"can_view_all\": true}');
 /*!40000 ALTER TABLE `administrator` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -125,7 +127,8 @@ CREATE TABLE `external_supervisor` (
 
 LOCK TABLES `external_supervisor` WRITE;
 /*!40000 ALTER TABLE `external_supervisor` DISABLE KEYS */;
-INSERT INTO `external_supervisor` VALUES (34,'ppppp','pppppp',NULL,'AI');
+INSERT INTO `external_supervisor` VALUES
+(20,'TechSoft Algerie','Directeur Technique','0555000020','Developpement Logiciel');
 /*!40000 ALTER TABLE `external_supervisor` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -326,7 +329,12 @@ CREATE TABLE `project` (
 
 LOCK TABLES `project` WRITE;
 /*!40000 ALTER TABLE `project` DISABLE KEYS */;
-INSERT INTO `project` VALUES (6,'ai agent','mini projet',4,'VALIDATED','2026-03-22 15:44:51',48,NULL,NULL,NULL),(7,'web app','simple web site ...........',6,'VALIDATED','2026-03-22 17:20:16',48,NULL,NULL,NULL),(8,'mobile app','simple mobile application ......',8,'VALIDATED','2026-03-22 18:09:08',48,NULL,NULL,NULL),(9,'qqqqqqq','..................................................................',4,'VALIDATED','2026-03-22 18:27:23',48,NULL,'qqqqqqqqqq',NULL),(10,'pppppppppppppppppppppp','llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll',8,'PENDING','2026-03-22 18:30:05',48,NULL,NULL,NULL);
+INSERT INTO `project` VALUES
+(1,'Systeme de Gestion PFE','Application web pour gerer les projets de fin detudes.',4,'VALIDATED','2026-01-10 09:00:00',5,NULL,'Projet bien structure, approuve.',NULL),
+(2,'Chatbot Intelligent pour ESI','Assistant conversationnel base sur NLP pour les etudiants.',3,'VALIDATED','2026-01-15 10:00:00',6,NULL,'Sujet innovant et realisable.',NULL),
+(3,'Plateforme E-Learning Adaptive','Plateforme avec recommandations personnalisees selon le profil etudiant.',4,'VALIDATED','2026-01-20 11:00:00',7,NULL,'Excellent sujet.',NULL),
+(4,'Application Mobile de Livraison','App Android et iOS pour livraisons en temps reel avec geolocalisation.',3,'VALIDATED','2026-01-25 09:30:00',NULL,20,'Projet pertinent pour lentreprise.',NULL),
+(5,'Detection dAnomalies Reseau','Systeme de detection dintrusions base sur le machine learning.',2,'PENDING','2026-02-01 08:00:00',5,NULL,NULL,NULL);
 /*!40000 ALTER TABLE `project` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -405,7 +413,10 @@ CREATE TABLE `promo` (
 
 LOCK TABLES `promo` WRITE;
 /*!40000 ALTER TABLE `promo` DISABLE KEYS */;
-INSERT INTO `promo` VALUES (1,NULL,2023,NULL,NULL),(2,NULL,2024,NULL,NULL),(3,NULL,2025,NULL,NULL),(4,NULL,2026,NULL,NULL),(5,'Promo 2023',2023,'2022-09-01','2023-06-30'),(6,'Promo 2024',2024,'2023-09-01','2024-06-30'),(7,'Promo 2025',2025,'2024-09-01','2025-06-30');
+INSERT INTO `promo` VALUES
+(1,'Promo 2024',2024,'2023-09-01','2024-06-30'),
+(2,'Promo 2025',2025,'2024-09-01','2025-06-30'),
+(3,'Promo 2026',2026,'2025-09-01','2026-06-30');
 /*!40000 ALTER TABLE `promo` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -517,7 +528,12 @@ CREATE TABLE `speciality` (
 
 LOCK TABLES `speciality` WRITE;
 /*!40000 ALTER TABLE `speciality` DISABLE KEYS */;
-INSERT INTO `speciality` VALUES (1,'Informatique',NULL),(2,'Génie Logiciel',NULL),(3,'Intelligence Artificielle',NULL),(4,'Réseaux et Télécommunications',NULL),(5,'Systèmes Embarqués',NULL),(6,'Informatique','INFO'),(7,'Réseaux et Télécommunications','RT'),(8,'Intelligence Artificielle','IA'),(9,'Génie Logiciel','GL'),(10,'Systèmes Informatiques','SI');
+INSERT INTO `speciality` VALUES
+(1,'Informatique','INFO'),
+(2,'Genie Logiciel','GL'),
+(3,'Intelligence Artificielle','IA'),
+(4,'Reseaux et Telecommunications','RT'),
+(5,'Systemes Embarques','SE');
 /*!40000 ALTER TABLE `speciality` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -550,7 +566,12 @@ CREATE TABLE `student` (
 
 LOCK TABLES `student` WRITE;
 /*!40000 ALTER TABLE `student` DISABLE KEYS */;
-INSERT INTO `student` VALUES (33,13.40,'ACTIVE',NULL,3,5),(46,17.00,'ACTIVE',NULL,5,5),(65,13.23,'ACTIVE',NULL,1,5);
+INSERT INTO `student` VALUES
+(30,14.50,'ACTIVE',NULL,2,3),
+(31,15.75,'ACTIVE',NULL,3,3),
+(32,13.20,'ACTIVE',NULL,2,3),
+(33,16.00,'ACTIVE',NULL,1,3),
+(34,12.80,'ACTIVE',NULL,3,3);
 /*!40000 ALTER TABLE `student` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -576,7 +597,8 @@ CREATE TABLE `super_admin` (
 
 LOCK TABLES `super_admin` WRITE;
 /*!40000 ALTER TABLE `super_admin` DISABLE KEYS */;
-INSERT INTO `super_admin` VALUES (1,'Super Admin','{\"can_view_all\": true, \"can_create_admin\": true, \"can_delete_users\": true, \"can_update_users\": true, \"can_create_etudiant\": true, \"can_create_enseignant\": true, \"can_create_entreprise\": true, \"can_assign_permissions\": true}');
+INSERT INTO `super_admin` VALUES
+(1,'Salim Hadj','{\"can_view_all\": true, \"can_create_admin\": true, \"can_delete_users\": true, \"can_update_users\": true, \"can_create_etudiant\": true, \"can_create_enseignant\": true, \"can_create_entreprise\": true, \"can_assign_permissions\": true}');
 /*!40000 ALTER TABLE `super_admin` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -601,7 +623,10 @@ CREATE TABLE `teacher` (
 
 LOCK TABLES `teacher` WRITE;
 /*!40000 ALTER TABLE `teacher` DISABLE KEYS */;
-INSERT INTO `teacher` VALUES (4,'AI'),(5,'isi'),(39,'ai'),(48,'ai');
+INSERT INTO `teacher` VALUES
+(5,'Maitre de Conferences A'),
+(6,'Professeur'),
+(7,'Maitre Assistant A');
 /*!40000 ALTER TABLE `teacher` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -615,16 +640,21 @@ DROP TABLE IF EXISTS `team`;
 CREATE TABLE `team` (
   `id` int NOT NULL AUTO_INCREMENT,
   `project_id` int DEFAULT NULL,
+  `leader_id` int DEFAULT NULL,
   `status` enum('FORMING','VALIDATED','COMPLETED') DEFAULT NULL,
+  `max_students` int DEFAULT 6,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `project_id` (`project_id`),
-  CONSTRAINT `team_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `project` (`id`)
+  UNIQUE KEY `leader_id` (`leader_id`),
+  CONSTRAINT `team_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `project` (`id`),
+  CONSTRAINT `team_ibfk_2` FOREIGN KEY (`leader_id`) REFERENCES `student` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Dumping data for table `team`
+-- intentionally empty — create via Postman to test all endpoints
 --
 
 LOCK TABLES `team` WRITE;
@@ -655,6 +685,7 @@ CREATE TABLE `team_member` (
 
 --
 -- Dumping data for table `team_member`
+-- intentionally empty — populated via Postman invite/accept flow
 --
 
 LOCK TABLES `team_member` WRITE;
@@ -715,10 +746,38 @@ CREATE TABLE `users` (
 --
 -- Dumping data for table `users`
 --
+-- ╔════╦══════════════════════════════════╦═════════════════╦═══════════════╗
+-- ║ ID ║ Email                            ║ Password        ║ Role          ║
+-- ╠════╬══════════════════════════════════╬═════════════════╬═══════════════╣
+-- ║  1 ║ superadmin@pfe.dz                ║ superadmin123   ║ super_admin   ║
+-- ║  5 ║ karim.benali@pfe.dz              ║ karim123        ║ enseignant    ║
+-- ║  6 ║ nadia.hamdi@pfe.dz               ║ nadia123        ║ enseignant    ║
+-- ║  7 ║ youcef.brahimi@pfe.dz            ║ youcef123       ║ enseignant    ║
+-- ║ 10 ║ lynda.meziane@pfe.dz             ║ lynda123        ║ admin         ║
+-- ║ 11 ║ rachid.aouad@pfe.dz              ║ rachid123       ║ admin         ║
+-- ║ 20 ║ omar.sahnoun@pfe.dz              ║ omar123         ║ entreprise    ║
+-- ║ 30 ║ amina.zerrouk@pfe.dz             ║ amina123        ║ etudiant      ║
+-- ║ 31 ║ bilal.messaoudi@pfe.dz           ║ bilal123        ║ etudiant      ║
+-- ║ 32 ║ chaima.boudali@pfe.dz            ║ chaima123       ║ etudiant      ║
+-- ║ 33 ║ djamel.touati@pfe.dz             ║ djamel123       ║ etudiant      ║
+-- ║ 34 ║ esma.benkhaled@pfe.dz            ║ esma123         ║ etudiant      ║
+-- ╚════╩══════════════════════════════════╩═════════════════╩═══════════════╝
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,NULL,NULL,'superadmin@example.com','$2b$12$D9ysqqWC0J7bzOq0C/W/4uvAbg19noTlosJEmhi/Sdsl1neHh0aN6','super_admin',1,'2026-03-12 14:31:12',NULL,'5a82cbcc43882f00880c2a3e230db83ffb0e842a90bbe3e553c8b76640972d1e','2026-03-12 16:23:48',NULL),(4,'asmaa','babeker','a.babeker@esi-sba.dz','$2b$12$eGEZBvbL6viBU/o8QfSqhO8q9FzXSwDJijfYFm82Dj3/KJHpvshHK','enseignant',1,'2026-03-13 01:08:57',1,NULL,NULL,'0671188221'),(5,'wafaa','rahmoune','w.rahmoune@esi-sba.dz','$2b$12$qA3HgBcKTHBxARzJ8mULq.Y.MKUj36ZLIJp4VUOLHmub.0fE3ooK.','enseignant',1,'2026-03-13 01:26:45',1,NULL,NULL,'0612233445'),(33,'radjaa','turki','r.turki@esi-sba.dz','$2b$12$iiRbDM4Uz0UeUfVa7pKjLejBcxzlxGfqm/m0SfNfjZQbKV4M5yD7W','etudiant',1,'2026-03-13 16:05:34',1,NULL,NULL,'0675757575'),(34,'omar','sahnoun','o.sahnoun@esi-sba.dz','$2b$12$2xM09PRDT0lz4vUSo4Xqje4yA6iE5fvbAvRZMjeXHiaQwnGzTes1q','entreprise',1,'2026-03-13 16:07:16',1,NULL,NULL,'0565656565'),(39,'ahlem','ahlem','ahlem@esi-sba.dz','$2b$12$NRMKjREb1OXSUs2My8NYhO0HWIm29rdPxN8AtW4i9Ozg1n4EvXSzK','enseignant',1,'2026-03-13 16:23:01',1,NULL,NULL,'070909898'),(46,'marwa','marwa','marwa@esi-sba.dz','$2b$12$TKL5oOZ44sFGbkX9Bi6Fr.dXWgFBvfWaI.NedemSYyWeMp5dSG6q6','etudiant',1,'2026-03-13 16:42:51',1,NULL,NULL,'0787878787'),(48,'soumia','slimane turki','s.slimaneturki@esi-sba.dz','$2b$10$GH1KcU01nwEvH4j/0KSLpu4sfuCVX./DIISTuTv1VoGQrvCKSRxC6','enseignant',1,'2026-03-13 16:45:19',1,'5de8352b68f5c40427b2f80d044167c66e743133cc8c8e28d7ab174c454fc574','2026-03-18 00:46:53','0676655443'),(53,'xxxxx','xxxxxxxxx','cbb@esi-sba.dz','$2b$12$KHNCnHaj3OeJDi8G5L2/.uleGFh6W2m3O5yaG66o.J8eHJZ2AxfWO','admin',1,'2026-03-15 02:39:12',1,NULL,NULL,'xxxxxxxxxxx'),(54,'souzi','souzi','souzi@esi-sba.dz','$2b$12$KcSrBrhVkKDuBZ8U/8y9vu1LdrjmgtAhYV4S00pxDtyFkXevIzIJ6','admin',1,'2026-03-15 03:05:26',1,NULL,NULL,'787898980'),(65,'soumi','soumi','soumi@esi-sba.dz','$2b$12$ORYIn9eMEtbqFDfiOlj8KuHCsrS3GBcMgXwAOeCi890QpvlGPY68O','etudiant',1,'2026-03-17 23:09:31',1,NULL,NULL,'787898980');
+INSERT INTO `users` VALUES
+(1, 'Salim',  'Hadj',      'superadmin@pfe.dz',      '$2b$12$DLIDPA/2e.bS9OmamPlPUeqTsGCmV1y/36lK3GDDE7zKpvQDg40sm', 'super_admin', 1, '2026-01-01 08:00:00', NULL, NULL, NULL, '0550000001'),
+(5, 'Karim',  'Benali',    'karim.benali@pfe.dz',    '$2b$12$0.zmcG2YXhHlK1Pcmp/9k.5qPSdS8Bc15hhk2Tqd0CZOX7y9F8Fum', 'enseignant',  1, '2026-01-02 08:00:00', 1,    NULL, NULL, '0550000005'),
+(6, 'Nadia',  'Hamdi',     'nadia.hamdi@pfe.dz',     '$2b$12$8qmO7s7Aaxz/uODPC6BZtev5Z87CsHVbzK4m9HzO6H1d6pOH6OQme', 'enseignant',  1, '2026-01-02 09:00:00', 1,    NULL, NULL, '0550000006'),
+(7, 'Youcef', 'Brahimi',   'youcef.brahimi@pfe.dz',  '$2b$12$zULU9NSLwm.ZZOM4s6GKpe7ZhKb9Z4nZe9TmHI80S8bgvWQWhBg4e', 'enseignant',  1, '2026-01-02 10:00:00', 1,    NULL, NULL, '0550000007'),
+(10,'Lynda',  'Meziane',   'lynda.meziane@pfe.dz',   '$2b$12$OzQ/5frDuIUBfu5fIhx/guk5zGaneaj5iz1A5f6P9k426Qi0/KfCu', 'admin',       1, '2026-01-03 08:00:00', 1,    NULL, NULL, '0550000010'),
+(11,'Rachid', 'Aouad',     'rachid.aouad@pfe.dz',    '$2b$12$XqQBMqWyLtL1SglQ/FcQ7ua6Bh8yNYfgb0/UTHovsM55BugwbEoc.', 'admin',       1, '2026-01-03 09:00:00', 1,    NULL, NULL, '0550000011'),
+(20,'Omar',   'Sahnoun',   'omar.sahnoun@pfe.dz',    '$2b$12$KEBmAA/vbUXHp0Ei52T46OZKjlXnROvjnRxLCSWYH0rhXkvAn31j.', 'entreprise',  1, '2026-01-04 08:00:00', 1,    NULL, NULL, '0550000020'),
+(30,'Amina',  'Zerrouk',   'amina.zerrouk@pfe.dz',   '$2b$12$kijZyzfZ/1ySKDDfSQQab.z2FDn80uffQSD5WrNaendIUe9XpAOWG', 'etudiant',    1, '2026-01-05 08:00:00', 1,    NULL, NULL, '0550000030'),
+(31,'Bilal',  'Messaoudi', 'bilal.messaoudi@pfe.dz', '$2b$12$qo8jhrD5M9GM1WsrPTrIe.sTmAu3HCYrmd6b6ObhIYtiKjbTmddpG', 'etudiant',    1, '2026-01-05 09:00:00', 1,    NULL, NULL, '0550000031'),
+(32,'Chaima', 'Boudali',   'chaima.boudali@pfe.dz',  '$2b$12$ZpKpA1XhjihYzU5xJOniIuRbp3VTk3wDTrClaLyCOaF9h5qVYD2/m', 'etudiant',    1, '2026-01-05 10:00:00', 1,    NULL, NULL, '0550000032'),
+(33,'Djamel', 'Touati',    'djamel.touati@pfe.dz',   '$2b$12$Taz9T/mrCONpTcW44kk4IuCX3/97D21q9KrWTjBfOSW3TPqS.C7kq', 'etudiant',    1, '2026-01-05 11:00:00', 1,    NULL, NULL, '0550000033'),
+(34,'Esma',   'Benkhaled', 'esma.benkhaled@pfe.dz',  '$2b$12$mhtyqteHGUx85sHXgpNFqO0mBFsYJr9lUybVsMcFungNw0AMFO5oi', 'etudiant',    1, '2026-01-05 12:00:00', 1,    NULL, NULL, '0550000034');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -751,6 +810,7 @@ LOCK TABLES `wish` WRITE;
 /*!40000 ALTER TABLE `wish` DISABLE KEYS */;
 /*!40000 ALTER TABLE `wish` ENABLE KEYS */;
 UNLOCK TABLES;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -761,4 +821,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-22 18:39:25
+-- Dump completed on 2026-03-31

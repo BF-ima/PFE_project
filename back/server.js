@@ -9,10 +9,15 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const schoolRoutes = require("./routes/schoolRoutes");
 const projectRoutes = require("./routes/projectRoutes");
-
-
+const teamRoutes    = require("./routes/teamRoutes");
+const studentRoutes = require("./routes/studentRoutes");
 
 const app = express();
+
+
+
+
+
 
 // middlewares
 app.use(express.json());        // pour lire req.body JSON
@@ -29,6 +34,13 @@ const limiter = rateLimit({
   max: 5                      // max 5 tentatives
 });
 
+
+// routes
+app.use("/api/auth", authRoutes); 
+app.use("/api", schoolRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/teams",   teamRoutes);
+app.use("/api/student", studentRoutes);
 // appliquer le limiter uniquement sur la route login
 app.use("/api/auth/login", limiter); 
 
@@ -36,6 +48,8 @@ app.use("/api/auth/login", limiter);
 app.use("/api/auth", authRoutes); 
 app.use("/api", schoolRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/teams",   teamRoutes);
+app.use("/api/student", studentRoutes);
 
 // route test
 app.get("/", (req, res) => res.send("Backend fonctionne"));

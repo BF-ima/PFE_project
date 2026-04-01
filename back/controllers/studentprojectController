@@ -1,0 +1,272 @@
+/**
+ * ==============================================================================
+ * STUDENT PROJECT CONTROLLER
+ * ==============================================================================
+ * Allows students to:
+ *   - Browse all VALIDATED projects
+ *   - Search projects by title
+ *   - Filter projects by supervisor (teacher or external)
+ *   - View a single project's details
+ * ==============================================================================
+ */
+
+const db  = require("../config/db");
+const jwt = require("jsonwebtoken");
+
+// ---------------------------------------------------------------------------
+// HELPER — verify token and ensure the caller is a student
+// ---------------------------------------------------------------------------
+const getStudentFromToken = async (token) => {
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const [rows]  = await db.execute(
+    "SELECT id, role FROM users WHERE id = ? AND is_active = 1",
+    [decoded.id]
+  );
+  if (rows.length === 0) throw new Error("Utilisateur non trouvé");
+  if (rows[0].role !== "etudiant") throw new Error("Accès réservé aux étudiants");
+  return rows[0];
+};
+
+// ---------------------------------------------------------------------------
+// GET /api/student/projects
+// Browse available (VALIDATED) projects with optional search & filter
+//
+// Query params:
+//   search    — partial match on project title (case-insensitive)
+//   teacher_id     — filter by teacher supervisor id
+//   supervisor_id  — filter by external supervisor id
+//   page      — page number (default 1)
+//   limit     — results per page (default 10, max 50)
+// ---------------------------------------------------------------------------
+exports.browseProjects = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    await getStudentFromToken(token);
+
+    let {
+      search       = "",
+      supervisor_name = "",
+      teacher_id,
+      supervisor_id,
+      page  = 1,
+      limit = 10,
+    } = req.query;
+
+    // Sanitise pagination
+    page  = Math.max(1, parseInt(page)  || 1);
+    limit = Math.min(50, Math.max(1, parseInt(limit) || 10));
+    const offset = (page - 1) * limit;
+
+    // Base WHERE clause — students can only see validated projects
+    const conditions = ["p.status = 'VALIDATED'"];
+    const params     = [];
+
+    if (search.trim()) {
+      conditions.push("p.title LIKE ?");
+      params.push(`%${search.trim()}%`);
+    }
+
+     // 2. Supervisor name search — matches teacher OR external supervisor
+   
+
+     if (supervisor_name.trim()) {
+      conditions.push(`(
+        CONCAT(COALESCE(t.first_name,''), ' ', COALESCE(t.last_name,''))  LIKE ?
+        OR
+        CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))  LIKE ?
+      )`);
+      params.push(`%${supervisor_name.trim()}%`);
+      params.push(`%${supervisor_name.trim()}%`);
+    }
+
+    if (teacher_id) {
+      conditions.push("p.teacher_id = ?");
+      params.push(parseInt(teacher_id));
+    }
+
+    if (supervisor_id) {
+      conditions.push("p.external_supervisor_id = ?");
+      params.push(parseInt(supervisor_id));
+    }
+
+     const whereClause = `WHERE ${conditions.join(" AND ")}`;
+ 
+    // ── The JOIN block (same for count and main query) ───────────────────────
+    // We need the JOINs in the COUNT query too because supervisor_name filter
+    // references the joined columns.
+    const joinBlock = `
+      LEFT JOIN users t  ON p.teacher_id             = t.id
+      LEFT JOIN users e  ON p.external_supervisor_id = e.id
+      LEFT JOIN external_supervisor es ON e.id        = es.id
+    `;
+
+     // ── COUNT (for pagination metadata) ─────────────────────────────────────
+    const [countRows] = await db.execute(
+      `SELECT COUNT(*) AS total
+       FROM project p
+       ${joinBlock}
+       ${whereClause}`,
+      params                        // only WHERE params, no LIMIT/OFFSET here
+    );
+    const total = countRows[0].total;
+ 
+
+// ── MAIN SELECT ──────────────────────────────────────────────────────────
+    // IMPORTANT: LIMIT and OFFSET are passed as the LAST two params, separately
+    // from the WHERE params, and cast to Number to guarantee mysql2 binds them
+    // as integers (not strings).
+    const [projects] = await db.execute(
+      `SELECT
+          p.id,
+          p.title,
+          p.description,
+          p.max_students,
+          p.status,
+          p.created_at,
+          p.approval_comment,
+ 
+          -- Teacher supervisor
+          p.teacher_id,
+          CONCAT(t.first_name, ' ', t.last_name)         AS teacher_name,
+          t.email                                          AS teacher_email,
+          t.phone                                          AS teacher_phone,
+ 
+          -- External supervisor
+          p.external_supervisor_id,
+          CONCAT(e.first_name, ' ', e.last_name)          AS external_supervisor_name,
+          e.email                                          AS external_supervisor_email,
+          es.organization                                  AS company_name,
+          es.department                                    AS company_department,
+ 
+          -- Occupied spots (accepted members linked to this project's team)
+          (
+            SELECT COUNT(*)
+            FROM team_member tm2
+            INNER JOIN team t2 ON tm2.team_id = t2.id
+            WHERE t2.project_id = p.id AND tm2.status = 'ACCEPTED'
+          ) AS assigned_students
+ 
+       FROM project p
+       ${joinBlock}
+       ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+       params    // ← explicit Number cast
+    );
+
+    res.json({
+      projects,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    console.error("browseProjects error:", err);
+    if (err.message.includes("Accès réservé") || err.message.includes("non trouvé")) {
+      return res.status(403).json({ message: err.message });
+    }
+    res.status(500).json({ message: "Erreur serveur lors de la récupération des projets" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET /api/student/projects/:id
+// Get full details of a single VALIDATED project
+// ---------------------------------------------------------------------------
+exports.getProjectDetails = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    await getStudentFromToken(token);
+
+    const { id } = req.params;
+
+    const [projects] = await db.execute(
+      `SELECT
+          p.*,
+          CONCAT(t.first_name, ' ', t.last_name)  AS teacher_name,
+          t.email                                   AS teacher_email,
+          t.phone                                   AS teacher_phone,
+          CONCAT(e.first_name, ' ', e.last_name)  AS external_supervisor_name,
+          e.email                                   AS external_supervisor_email,
+          e.phone                                   AS external_supervisor_phone,
+          es.organization                           AS company_name,
+          es.department                             AS company_department
+       FROM project p
+       LEFT JOIN users t  ON p.teacher_id             = t.id
+       LEFT JOIN users e  ON p.external_supervisor_id = e.id
+       LEFT JOIN external_supervisor es ON e.id = es.id
+       WHERE p.id = ? AND p.status = 'VALIDATED'`,
+      [id]
+    );
+
+    if (projects.length === 0) {
+      return res.status(404).json({ message: "Projet introuvable ou non disponible" });
+    }
+
+    // Attach the team assigned to this project (if any) for context
+    const [teams] = await db.execute(
+      `SELECT t.id AS team_id, t.status AS team_status,
+              COUNT(tm.id) AS member_count
+       FROM team t
+       LEFT JOIN team_member tm ON t.id = tm.team_id AND tm.status = 'ACCEPTED'
+       WHERE t.project_id = ?
+       GROUP BY t.id`,
+      [id]
+    );
+
+    res.json({
+      project: {
+        ...projects[0],
+        team: teams[0] || null,
+      },
+    });
+  } catch (err) {
+    console.error("getProjectDetails error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET /api/student/supervisors
+// List all supervisors (teachers + external) to populate filter dropdowns
+// ---------------------------------------------------------------------------
+exports.getSupervisors = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    await getStudentFromToken(token);
+
+    // Teachers who have at least one validated project
+    const [teachers] = await db.execute(
+      `SELECT DISTINCT u.id, u.first_name, u.last_name, u.email, 'enseignant' AS type
+       FROM users u
+       INNER JOIN project p ON p.teacher_id = u.id
+       WHERE p.status = 'VALIDATED'
+       ORDER BY u.last_name`
+    );
+
+    // External supervisors who have at least one validated project
+    const [externals] = await db.execute(
+      `SELECT DISTINCT u.id, u.first_name, u.last_name, u.email,
+              es.organization, 'entreprise' AS type
+       FROM users u
+       INNER JOIN external_supervisor es ON u.id = es.id
+       INNER JOIN project p ON p.external_supervisor_id = u.id
+       WHERE p.status = 'VALIDATED'
+       ORDER BY u.last_name`
+    );
+
+    res.json({ teachers, external_supervisors: externals });
+  } catch (err) {
+    console.error("getSupervisors error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
