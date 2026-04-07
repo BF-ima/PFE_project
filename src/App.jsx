@@ -14,6 +14,7 @@ import ModifyProjectPage from './component/supervisor/ModifyProjectPage';
 import TeamsPage from './component/supervisor/TeamsPage';
 import TeamManagementPage from './component/student/TeamManagementPage';
 import Notifications from './component/student/Notifications';
+import PreferenceList from './component/student/PreferenceList';
 
 
 
@@ -35,6 +36,7 @@ function App() {
         <Route index path='supervisor/teamspage' element={<TeamsPage />} />
         <Route index path='student/TeamManagementPage' element={<TeamManagementPage />} />
         <Route index path='student/notifications' element={<Notifications />} />
+        <Route path='student/preferencelist' element={<PreferenceList />} />
       </Routes>
     </>
   )
