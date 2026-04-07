@@ -13,6 +13,8 @@ import ProjectsPage from './component/supervisor/ProjectsPage.jsx'
 import AddProjectPage from './component/supervisor/AddProjectPage';
 import ModifyProjectPage from './component/supervisor/ModifyProjectPage';
 import TeamsPage from './component/supervisor/TeamsPage';
+import TeamManagementPage from './component/student/TeamManagementPage.jsx';
+import Notifications from './component/student/Notifications.jsx';
 
 
 
@@ -30,6 +32,8 @@ function App() {
         <Route index path='/projectsdashboard' element={<ProjectDashboard />} /> {/*Admin session */}
         <Route index path='/accountsmanage' element={<UserAccountsManage />} />
         <Route index path='student/firstpage' element={<FirstPage />} /> {/*Student session */}
+        <Route index path='student/teammanagementpage' element={<TeamManagementPage />} />
+        <Route index path='student/notifications' element={<Notifications />} />
         <Route index path='supervisor/homepage' element={<HomePage />} />  {/*Supervisor session */}
         <Route index path='supervisor/projectspage' element={<ProjectsPage />} /> {/*Supervisor session */}
         <Route path='supervisor/addprojectpage' element={<AddProjectPage />} />
