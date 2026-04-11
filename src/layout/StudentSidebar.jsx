@@ -10,8 +10,8 @@ const StudentSidebar = () => {
   const menuItems = [
     { icon: LayoutGrid, path: '/student/firstpage', label: 'Dashboard' },
     { icon: UsersRound, path: '/student/TeamManagementPage', label: 'Team Management' },
-    { icon: Star, path: '/student/preference', label: 'Preference List' },
-    { icon: MessageCircle, path: '/student/chat', label: 'Chat' },
+    { icon: Star, path: '/student/preferencelist', label: 'Preference List' },
+    { icon: MessageCircle, path: '/student/chatpage', label: 'Chat' },
     { icon: Bell, path: '/student/notifications', label: 'Notifications' },
     { icon: Folder, path: '/student/documents', label: 'Documents & Resources' },
   ];

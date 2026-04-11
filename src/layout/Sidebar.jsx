@@ -1,8 +1,24 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MENU_ITEMS } from '../config/MenuItems'; // <- import
+import { 
+  LayoutGrid, UserRoundCog, UsersRound, MessageCircle, Bell, GraduationCap,
+  Building2, FileCheckCorner, ChartColumn, 
+} from 'lucide-react';
 
-const Sidebar = () => {
+// Configuration centralisée du menu
+export const MENU_ITEMS = [
+  { icon: LayoutGrid, path: '/projectsdashboard', label: 'Dashboard' },
+  { icon: UserRoundCog, path: '/accountsmanage', label: 'User Accounts Management' },
+  { icon: UsersRound, path: '/teamsallocation', label: 'Manage Teams & Project Choices' },
+  { icon: MessageCircle, path: '/messaging', label: 'Messaging' },
+  { icon: Bell, path: '/notifications', label: 'Notifications' },
+  { icon: Building2, path: '/academicentitymanage', label: 'Academic Entity Management' },
+  { icon: FileCheckCorner, path: '/proposalreview', label: 'Proposal Review' },
+  { icon: GraduationCap, path: '/defense-manage', label: 'Defense Management' },
+  { icon: ChartColumn, path: '/statistics', label: 'Statistics' },
+];
+
+const Sidebar = ({ menuItems = MENU_ITEMS }) => {
   const location = useLocation();
 
   return (
@@ -19,7 +35,7 @@ const Sidebar = () => {
       </div>
       
       {/* Menu Items */}
-      {MENU_ITEMS.map((item, index) => (
+      {menuItems.map((item, index) => (
         <Link
           key={index}
           to={item.path}
