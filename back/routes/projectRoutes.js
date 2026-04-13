@@ -9,5 +9,6 @@ router.get   ("/:id",        projectController.getProjectById);
 router.put   ("/:id",        projectController.updateProject);
 router.put   ("/:id/status", projectController.updateProjectStatus);
 router.delete("/:id",        projectController.deleteProject);
+router.get("/:id/messages", projectController.getProjectMessages);
 
 module.exports = router;

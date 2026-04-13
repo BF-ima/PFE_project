@@ -9,6 +9,13 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const schoolRoutes = require("./routes/schoolRoutes");
 const projectRoutes = require("./routes/projectRoutes");
+const teamRoutes    = require("./routes/teamRoutes");
+const studentRoutes = require("./routes/studentRoutes");
+const userRoutes = require("./routes/userRoutes");
+const wishRoutes = require("./routes/wishRoutes");
+
+const path = require('path');
+
 
 
 
@@ -29,6 +36,10 @@ const limiter = rateLimit({
   max: 5                      // max 5 tentatives
 });
 
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+
+
 // appliquer le limiter uniquement sur la route login
 app.use("/api/auth/login", limiter); 
 
@@ -36,9 +47,20 @@ app.use("/api/auth/login", limiter);
 app.use("/api/auth", authRoutes); 
 app.use("/api", schoolRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/teams",   teamRoutes);
+app.use("/api/student", studentRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/notifications", require("./routes/notificationRoutes"));
+app.use("/api/announcements", require("./routes/announcementRoutes"));
+app.use("/api/invitations",   require("./routes/invitationRoutes"));
+app.use("/api/wishes",   wishRoutes);
+app.use("/api/messages", require("./routes/messageRoutes"));
+app.use("/api/distribution", require("./routes/distributionRoutes"));
 
-// route test
-app.get("/", (req, res) => res.send("Backend fonctionne"));
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ message: err.message || 'Erreur serveur' });
+});
 
 // serveur
 app.listen(3000, () => console.log("🚀 Serveur démarré sur port 3000"));

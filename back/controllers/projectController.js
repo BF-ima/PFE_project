@@ -9,11 +9,8 @@ const getSupervisorFromToken = async (token) => {
     [decoded.id]
   );
   if (users.length === 0) throw new Error("Utilisateur non trouvé");
-  const user = users[0];
-  if (user.role !== "enseignant" && user.role !== "entreprise") {
-    throw new Error("Accès refusé. Seuls les superviseurs peuvent créer des projets");
-  }
-  return user;
+
+  return users[0];
 };
 
 // -----------------------------------------------------------------------------
@@ -25,6 +22,9 @@ exports.createProject = async (req, res) => {
 
   try {
     const supervisor = await getSupervisorFromToken(token);
+    if (supervisor.role !== "enseignant" && supervisor.role !== "entreprise") {
+    throw new Error("Accès refusé. Seuls les superviseurs peuvent créer des projets");
+    }
     const { title, max_students, description } = req.body;
 
     if (!title || !max_students) {
@@ -224,15 +224,36 @@ exports.getAllProjects = async (req, res) => {
   if (!token) return res.status(401).json({ message: "Non authentifié" });
 
   try {
-    const [projects] = await db.execute(
-      `SELECT p.*,
-              CONCAT(t.first_name, ' ', t.last_name) AS teacher_name,
-              CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name
-       FROM project p
-       LEFT JOIN users t ON p.teacher_id             = t.id
-       LEFT JOIN users e ON p.external_supervisor_id = e.id
-       ORDER BY p.created_at DESC`
-    );
+    const user = await getSupervisorFromToken(token);
+
+    const allowedRoles = ["super_admin", "admin", "enseignant", "entreprise", "etudiant"];
+    if (!allowedRoles.includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    // ── read optional ?status= query param ──────────────────────────────────
+    const { status } = req.query;
+
+    const validStatuses = ["PENDING", "VALIDATED", "REJECTED", "ASSIGNED", "COMPLETED"];
+
+    let query = `
+      SELECT p.*,
+             CONCAT(t.first_name, ' ', t.last_name) AS teacher_name,
+             CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name
+      FROM project p
+      LEFT JOIN users t ON p.teacher_id             = t.id
+      LEFT JOIN users e ON p.external_supervisor_id = e.id
+    `;
+    const params = [];
+
+    if (status && validStatuses.includes(status.toUpperCase())) {
+      query += " WHERE p.status = ?";
+      params.push(status.toUpperCase());
+    }
+
+    query += " ORDER BY p.created_at DESC";
+
+    const [projects] = await db.execute(query, params);
     res.json({ projects });
 
   } catch (err) {
@@ -283,6 +304,35 @@ exports.updateProjectStatus = async (req, res) => {
 
   } catch (err) {
     console.error("updateProjectStatus error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+// -----------------------------------------------------------------------------
+// message history
+// -----------------------------------------------------------------------------
+exports.getProjectMessages = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const { id } = req.params;
+    const [messages] = await db.execute(
+      `SELECT m.id, m.content, m.created_at,
+              m.sender_id,
+              CONCAT(u.first_name, ' ', u.last_name) AS sender_name,
+              u.role AS sender_role
+       FROM project_message m
+       JOIN users u ON m.sender_id = u.id
+       WHERE m.project_id = ?
+       ORDER BY m.created_at ASC
+       LIMIT 100`,
+      [id]
+    );
+    res.json({ messages });
+  } catch (err) {
+    console.error("getProjectMessages error:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
