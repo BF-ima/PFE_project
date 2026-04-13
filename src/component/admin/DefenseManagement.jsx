@@ -1,7 +1,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar.jsx";
-import ProfileDropdown from "../supervisor/HomePage";
+import { ProfileDropdown } from '../supervisor/HomePage';
+import useCurrentUser from '../../hooks/useCurrentUser';
 import { Clock, ArrowLeft, Sparkles } from "lucide-react";
 
 const ComingSoon = ({ 
@@ -10,13 +11,7 @@ const ComingSoon = ({
 }) => {
   const navigate = useNavigate();
 
-  const [currentUser] = React.useState({
-    id: 1,
-    firstName: "Admin",
-    lastName: "Principal",
-    email: "admin@esi-sba.dz",
-    role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   const handleLogout = () => {
     localStorage.removeItem("token");

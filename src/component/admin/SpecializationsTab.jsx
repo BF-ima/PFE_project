@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+
 import { Search, Plus, Edit2, Trash2, BookOpen } from "lucide-react";
 
 const SpecializationsTab = () => {

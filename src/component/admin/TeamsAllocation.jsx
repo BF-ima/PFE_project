@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar.jsx";
-import ProfileDropdown from "../supervisor/HomePage";
+import { ProfileDropdown } from '../supervisor/HomePage';
+import useCurrentUser from '../../hooks/useCurrentUser';
 import DeadlineSettingsModal from "../../layout/DeadlineSettingsModal.jsx";
 import {
   Search,
@@ -19,13 +20,7 @@ const TeamsAllocation = () => {
   const [isDeadlineModalOpen, setIsDeadlineModalOpen] = useState(false);
 
   // User actuel
-  const [currentUser] = useState({
-    id: 1,
-    firstName: "Admin",
-    lastName: "Principal",
-    email: "admin@esi-sba.dz",
-    role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   // Données mockées pour les statistiques
   const [stats] = useState({

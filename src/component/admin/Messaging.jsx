@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar.jsx";
-import ProfileDropdown from "../supervisor/HomePage";
+import { ProfileDropdown } from '../supervisor/HomePage';
+import useCurrentUser from '../../hooks/useCurrentUser';
 import { Search, Paperclip, Send, Check, CheckCheck, X } from "lucide-react";
 
 const Messaging = () => {
@@ -12,13 +13,7 @@ const Messaging = () => {
   const messagesEndRef = useRef(null);
 
   // User actuel
-  const [currentUser] = useState({
-    id: 1,
-    firstName: "Admin",
-    lastName: "Principal",
-    email: "admin@esi-sba.dz",
-    role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   // Conversations mockées
   const [conversations] = useState([

@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar";
-import ProfileDropdown from "../supervisor/HomePage";
+import { ProfileDropdown } from '../supervisor/HomePage';
+import useCurrentUser from '../../hooks/useCurrentUser';
+import Announcements from "./Announcements.jsx";
 import { ApproveProjectModal, RejectProjectModal } from "../../layout/ProjectApprovalModals";
 import { Search, User, Calendar, Check, X, Clock, FileText } from "lucide-react";
 
@@ -15,13 +17,7 @@ const ProposalReview = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   
   // User actuel
-  const [currentUser] = useState({
-    id: 1,
-    firstName: "Admin",
-    lastName: "Principal",
-    email: "admin@esi-sba.dz",
-    role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   // Données mockées des projets
   const [projects, setProjects] = useState([

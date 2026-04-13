@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar.jsx";
-import ProfileDropdown from "../supervisor/HomePage";
+import { ProfileDropdown } from '../supervisor/HomePage';
+import useCurrentUser from '../../hooks/useCurrentUser';
 import Announcements from "./Announcements.jsx";
 import {
   Bell,
@@ -23,13 +24,7 @@ const Notifications = () => {
   const [activeTab, setActiveTab] = useState("notifications");
 
   // User actuel
-  const [currentUser] = useState({
-    id: 1,
-    firstName: "Admin",
-    lastName: "Principal",
-    email: "admin@esi-sba.dz",
-    role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   // Données mockées des notifications
   const [notifications, setNotifications] = useState([

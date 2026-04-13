@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar";
-import ProfileDropdown from "../supervisor/HomePage";
+import { ProfileDropdown } from '../supervisor/HomePage';
+import useCurrentUser from '../../hooks/useCurrentUser';
 import SpecializationsTab from "./SpecializationsTab";
 import CohortsTab from "./CohortsTab";
 
@@ -10,13 +11,7 @@ const AcademicEntityManagement = () => {
   const navigate = useNavigate();
 
   // User actuel (à remplacer par le contexte d'authentification)
-  const [currentUser] = useState({
-    id: 1,
-    firstName: "Admin",
-    lastName: "Principal",
-    email: "admin@esi-sba.dz",
-    role: "Super Admin",
-  });
+  const { currentUser } = useCurrentUser();
 
   // ✅ Handlers pour ProfileDropdown
   const handleLogout = () => {
