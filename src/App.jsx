@@ -18,8 +18,7 @@ import PreferenceList from './component/student/PreferenceList';
 import ChatPage from './component/student/ChatPage';
 import SupervisorChatPage from './component/supervisor/ChatPage';
 import SupervisorNotifications from './component/supervisor/Notifications';
-
-
+import DocumentsPage from './component/student/DocumentsPage';
 
 function App() {
 
@@ -43,9 +42,10 @@ function App() {
          <Route path='student/chatpage' element={<ChatPage />} /> 
          <Route path='supervisor/chat' element={<SupervisorChatPage />} />
          <Route path='supervisor/notifications' element={<SupervisorNotifications />} />
+         <Route path='student/documents' element={<DocumentsPage />} />
       </Routes>
     </>
   )
 }
 
-export default App
+export default App;
