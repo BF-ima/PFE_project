@@ -123,8 +123,9 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd, specialities = [], pro
     }
 
     if (userType === 'teacher') {
-      payload.specialization = formData.specialization;
-    }
+  payload.specialization = formData.specialization;
+  payload.rank = formData.rank;  
+}
 
     if (userType === 'externalSupervisor') {
       payload.company_name   = formData.companyName;
@@ -195,13 +196,25 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd, specialities = [], pro
               )}
 
               {/* Teacher */}
-              {userType === 'teacher' && (
-                <InputField
-                  label="Specialization"
-                  value={formData.specialization}
-                  onChange={set('specialization')}
-                />
-              )}
+{userType === 'teacher' && (
+  <>
+    <InputField
+      label="Specialization"
+      value={formData.specialization}
+      onChange={set('specialization')}
+    />
+    <SelectField
+      label="Rank"
+      value={formData.rank}
+      onChange={set('rank')}
+      options={[
+        { value: 'A', label: 'A' },
+        { value: 'B', label: 'B' },
+        { value: 'C', label: 'C' },
+      ]}
+    />
+  </>
+)}
 
               {/* External Supervisor */}
               {userType === 'externalSupervisor' && (

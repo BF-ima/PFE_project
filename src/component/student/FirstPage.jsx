@@ -112,28 +112,41 @@ const { currentUser } = useCurrentUser();
 
 
   // ── Fetch all VALIDATED projects ──
-  const fetchProjects = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const token = localStorage.getItem('token');
-      const res   = await fetch('http://localhost:3000/api/projects/all', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message || 'Erreur'); return; }
+const fetchProjects = useCallback(async () => {
+  setLoading(true);
+  setError('');
+  try {
+    const token = localStorage.getItem('token');
 
-      // Show only VALIDATED projects
-      const validated = (data.projects || []).filter(p => p.status === 'VALIDATED');
-      setProjects(validated);
-    } catch (err) {
-      console.error('fetchProjects error:', err);
-      setError('Erreur serveur');
-    } finally {
-      setLoading(false);
+    // Fetch current user info to get their speciality_id and role
+    const meRes  = await fetch('http://localhost:3000/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const meData = await meRes.json();
+
+    const res  = await fetch('http://localhost:3000/api/projects/all', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) { setError(data.message || 'Erreur'); return; }
+
+    let validated = (data.projects || []).filter(p =>
+      p.status === 'VALIDATED' || p.status === 'ASSIGNED'
+    );
+
+    // If student → only show projects matching their speciality
+    if (meData.role === 'etudiant') {
+      validated = validated.filter(p => p.speciality_id === meData.speciality_id);
     }
-  }, []);
 
+    setProjects(validated);
+  } catch (err) {
+    console.error('fetchProjects error:', err);
+    setError('Erreur serveur');
+  } finally {
+    setLoading(false);
+  }
+}, []);
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   // Extraction de la liste des superviseurs 

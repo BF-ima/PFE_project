@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutGrid, Clipboard, UsersRound, MessageCircle, Bell, Folder
+  LayoutGrid, Clipboard, UsersRound, MessageCircle, Bell, Folder, Calendar
 } from 'lucide-react';
 
 const SupervisorSidebar = () => {
@@ -14,6 +14,7 @@ const SupervisorSidebar = () => {
     { icon: MessageCircle, path: '/supervisor/chat', label: 'Chat' },
     { icon: Bell, path: '/supervisor/notifications', label: 'Notifications' },
     { icon: Folder, path: '/supervisor/documents', label: 'Documents & Resources' },
+    { icon: Calendar, path: '/supervisor/meetings', label: 'Meeting Management' },
   ];
 
   return (

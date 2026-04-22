@@ -81,7 +81,7 @@ const ActionMenu = ({ user, onView, onEdit, onDelete }) => {
           </button>
           <button onClick={() => { onDelete(user); setIsOpen(false); }}
             className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-            <Trash2 size={16} /> Delete
+            <Trash2 size={16} /> Archive
           </button>
         </div>
       )}
@@ -138,10 +138,16 @@ const UserInfoModal = ({ user, userType, onClose }) => {
               </div>
             )}
             {userType === "teacher" && (
+              <>
               <div>
                 <label className="text-sm font-medium text-gray-500">Specialization</label>
                 <p className="mt-1 text-gray-900">{user?.specialization || "N/A"}</p>
               </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Rank</label>
+                <p className="mt-1 text-gray-900">{user?.rank || "N/A"}</p>
+              </div>
+              </>
             )}
             {userType === "externalSupervisor" && (
               <>
@@ -284,12 +290,25 @@ const ModifyUserModal = ({ user, userType, onSave, onClose }) => {
               </div>
             )}
             {userType === "teacher" && (
+              <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
                 <input type="text" value={formData.specialization}
                   onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
                   className={fieldClass} />
               </div>
+              <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Rank</label>
+      <select value={formData.rank}
+        onChange={(e) => setFormData({ ...formData, rank: e.target.value })}
+        className={fieldClass}>
+        <option value="">Select...</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+      </select>
+    </div>
+              </>
             )}
             {userType === "externalSupervisor" && (
               <>
@@ -637,6 +656,7 @@ function UserAccountsManage() {
         phone:          updatedUser.phoneNumber  || null,
         is_active:      updatedUser.status === "Active" ? 1 : 0,
         specialization: updatedUser.specialization || null,
+        rank:           updatedUser.rank            || null, 
         moyenne:        updatedUser.annualAverage   || null,
         company_name:   updatedUser.companyName     || null,
         contact_person: updatedUser.contactPerson   || null,

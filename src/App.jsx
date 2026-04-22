@@ -29,6 +29,10 @@ import DefenseManagement from './component/admin/DefenseManagement.jsx'
 import ChatPage from './component/student/ChatPage';
 import SupervisorChatPage from './component/supervisor/ChatPage';
 import SupervisorNotifications from './component/supervisor/Notifications';
+import DocumentsPage from './component/student/DocumentsPage';
+import SupervisorDocumentsPage from './component/supervisor/DocumentsPage';
+import MeetingManagement from './component/supervisor/MeetingManagement';
+import StudentMeetingPage from './component/student/StudentMeetingPage';
 
 
 
@@ -66,6 +70,10 @@ function App() {
         <Route path='student/chatpage' element={<ChatPage />} /> 
         <Route path='supervisor/chat' element={<SupervisorChatPage />} />
         <Route path='supervisor/notifications' element={<SupervisorNotifications />} />
+        <Route path='student/documents' element={<DocumentsPage />} />
+        <Route path='supervisor/documents' element={<SupervisorDocumentsPage />} />
+        <Route path='supervisor/meetings' element={<MeetingManagement />} />
+         <Route path='student/meetings' element={<StudentMeetingPage />} />
       </Routes>
     </>
   )

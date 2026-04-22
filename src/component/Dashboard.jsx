@@ -339,17 +339,23 @@ function ProjectDashboard() {
 
   // ── Stats ──
   const pendingCount  = projects.filter(p => p.status === "PENDING").length;
-  const approvedCount = projects.filter(p => p.status === "VALIDATED").length;
+  const approvedCount = projects.filter(p => p.status === "VALIDATED" || p.status === "ASSIGNED").length;
   const rejectedCount = projects.filter(p => p.status === "REJECTED").length;
 
   // ── Filter by activeFilter + search ──
-  const filteredProjects = projects
-    .filter(p => p.status === activeFilter)
-    .filter(p =>
-      p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.teacher_name || p.external_supervisor_name || "")
-        .toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  const statusMap = {
+  PENDING: ["PENDING"],
+  VALIDATED: ["VALIDATED", "ASSIGNED"],
+  REJECTED: ["REJECTED"],
+};
+
+const filteredProjects = projects
+  .filter(p => statusMap[activeFilter].includes(p.status))
+  .filter(p =>
+    p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.teacher_name || p.external_supervisor_name || "")
+      .toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const projectsPerPage   = 6;
   const totalPages        = Math.max(1, Math.ceil(filteredProjects.length / projectsPerPage));

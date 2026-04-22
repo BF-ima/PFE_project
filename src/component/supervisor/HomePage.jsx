@@ -217,7 +217,7 @@ function HomePage() {
       if (!res.ok) { setError(data.message || 'Erreur'); return; }
 
       // Show only VALIDATED projects
-      const validated = (data.projects || []).filter(p => p.status === 'VALIDATED');
+      const validated = (data.projects || []).filter(p => p.status === 'VALIDATED' || p.status === "ASSIGNED");
       setProjects(validated);
     } catch (err) {
       console.error('fetchProjects error:', err);

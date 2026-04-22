@@ -119,7 +119,11 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
                     <p className="text-sm text-gray-900 mt-1 font-medium">{fullProject.title}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-gray-500">Max Students</p>
+                    <p className="text-xs font-medium text-gray-500">Speciality</p>
+                    <p className="text-sm text-gray-900 mt-1 font-medium">{fullProject.speciality_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Max Teams</p>
                     <p className="text-sm text-gray-900 mt-1 font-medium">{fullProject.max_students}</p>
                   </div>
                   <div>

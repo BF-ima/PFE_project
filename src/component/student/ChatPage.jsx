@@ -80,11 +80,12 @@ const GroupIcon = ({ groupType, size = 16 }) => (
 const GroupBadge = ({ groupType }) =>
   groupType === 'team_supervisor' ? (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">
-      <GraduationCap size={9} /> Encadrant inclus
+      <GraduationCap size={9} /> Supervisor included
+
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-500 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
-      <Users size={9} /> Équipe uniquement
+      <Users size={9} /> team only
     </span>
   );
 
@@ -425,7 +426,7 @@ const ChatPage = () => {
                   <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
                     <Search size={14} className="text-gray-400 shrink-0" />
                     <input
-                      placeholder="Rechercher..."
+                      placeholder="search..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="bg-transparent flex-1 text-xs text-gray-700 placeholder-gray-400 focus:outline-none"
@@ -463,7 +464,7 @@ const ChatPage = () => {
                           </div>
                           <GroupBadge groupType={conv.group_type} />
                           <p className="text-xs text-gray-400 truncate mt-1">
-                            {conv.lastMessage || 'Aucun message'}
+                            {conv.lastMessage || 'No message'}
                           </p>
                         </div>
                         {conv.unread > 0 && (
@@ -514,7 +515,7 @@ const ChatPage = () => {
                       ) : messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-gray-300">
                           <Users size={40} className="mb-2" />
-                          <p className="text-xs text-gray-400">Soyez le premier à écrire dans ce groupe !</p>
+                          <p className="text-xs text-gray-400">Be the first to write in this group! !</p>
                         </div>
                       ) : (
                         messages.map((msg) => {
@@ -578,7 +579,7 @@ const ChatPage = () => {
                         />
                         <input
                           type="text"
-                          placeholder={`Écrire dans "${activeConv.name}"...`}
+                          placeholder={`Write in "${activeConv.name}"...`}
                           value={input}
                           onChange={(e) => setInput(e.target.value)}
                           onKeyDown={handleKeyDown}

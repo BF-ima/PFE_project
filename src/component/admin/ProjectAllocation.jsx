@@ -18,9 +18,9 @@ const authHeader = () => ({
 
 const api = {
   fetchWishes: () =>
-    fetch(`${BASE}/wishes/all`, { headers: authHeader() }).then((r) => r.json()),
+    fetch(`${BASE}/distribution/teams`, { headers: authHeader() }).then((r) => r.json()),
   fetchProjectsCount: () =>
-    fetch(`${BASE}/projects?status=VALIDATED`, { headers: authHeader() }).then((r) => r.json()),
+    fetch(`${BASE}/projects/all`, { headers: authHeader() }).then((r) => r.json()),
   preview: (mode) =>
     fetch(`${BASE}/distribution/preview`, { method: "POST", headers: authHeader(), body: JSON.stringify({ mode }) }).then((r) => r.json()),
   run: (mode) =>
@@ -32,7 +32,7 @@ const api = {
   manualAssign: (team_id, project_id) =>
     fetch(`${BASE}/distribution/manual`, { method: "POST", headers: authHeader(), body: JSON.stringify({ team_id, project_id }) }).then((r) => r.json()),
   validatedProjects: () =>
-    fetch(`${BASE}/projects?status=VALIDATED`, { headers: authHeader() }).then((r) => r.json()),
+    fetch(`${BASE}/projects/all`, { headers: authHeader() }).then((r) => r.json()),
 };
 
 const fmt = (n) => (n != null ? parseFloat(n).toFixed(2) : "—");
@@ -57,34 +57,82 @@ const ProjectAllocation = () => {
   const navigate = useNavigate();
   const { currentUser } = useCurrentUser();
 
-  const [searchQuery, setSearchQuery]     = useState("");
-  const [activeTab, setActiveTab]         = useState("teams");
+  const [searchQuery,   setSearchQuery]   = useState("");
+  const [activeTab,     setActiveTab]     = useState("teams");
   const [showAllocationModal, setShowAllocationModal] = useState(false);
-  const [selectedMode, setSelectedMode]   = useState("average");
+  const [selectedMode,  setSelectedMode]  = useState("average");
 
-  const [teams, setTeams]                 = useState([]);
+  const [teams,         setTeams]         = useState([]);
   const [loadingWishes, setLoadingWishes] = useState(true);
   const [projectsCount, setProjectsCount] = useState(0);
 
-  const [results, setResults]             = useState([]);
-  const [loadingResults, setLoadingResults] = useState(false);
+  const [results,         setResults]         = useState([]);
+  const [loadingResults,  setLoadingResults]  = useState(false);
 
-  const [unassignedTeams, setUnassignedTeams]     = useState([]);
-  const [loadingUnassigned, setLoadingUnassigned] = useState(false);
-  const [validatedProjects, setValidatedProjects] = useState([]);
-  const [selectedProject, setSelectedProject]     = useState({});
-  const [manualSaving, setManualSaving]           = useState({});
+  const [unassignedTeams,    setUnassignedTeams]    = useState([]);
+  const [loadingUnassigned,  setLoadingUnassigned]  = useState(false);
+  const [validatedProjects,  setValidatedProjects]  = useState([]);
+  const [selectedProject,    setSelectedProject]    = useState({});
+  const [manualSaving,       setManualSaving]       = useState({});
 
-  const [previewing, setPreviewing] = useState(false);
-  const [previewData, setPreviewData] = useState(null);
-  const [running, setRunning]       = useState(false);
+  const [previewing,   setPreviewing]  = useState(false);
+  const [previewData,  setPreviewData] = useState(null);
+  const [running,      setRunning]     = useState(false);
 
   const [error,   setError]   = useState("");
   const [success, setSuccess] = useState("");
 
-  const handleLogout = () => { localStorage.removeItem("token"); sessionStorage.clear(); navigate("/login"); };
+  // ── Deadline state ──────────────────────────────────────────────────────
+  const [deadline,       setDeadline]       = useState(null);
+  const [deadlinePassed, setDeadlinePassed] = useState(false);
 
-  // Load wishes on mount
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    sessionStorage.clear();
+    navigate("/login");
+  };
+
+  // ── Check existing results → redirect ──────────────────────────────────
+  useEffect(() => {
+    const checkExistingResults = async () => {
+      const res  = await fetch(`${BASE}/distribution/results`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      const data = await res.json();
+      if (data.results?.length > 0) {
+        navigate("/allocationresults", { replace: true });
+      }
+    };
+    checkExistingResults();
+  }, []);
+
+  // ── Fetch deadline ──────────────────────────────────────────────────────
+  useEffect(() => {
+    fetch(`${BASE}/deadline`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.deadline) {
+          const dl         = data.deadline;
+          const dateStr    = dl.deadline_date.slice(0, 10);
+          const timeStr    = (dl.deadline_time || "00:00:00").slice(0, 5);
+          const deadlineAt = new Date(`${dateStr}T${timeStr}:00`);
+          setDeadline(deadlineAt);
+          setDeadlinePassed(new Date() >= deadlineAt);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  // ── Re-check every minute whether deadline has passed ──────────────────
+  useEffect(() => {
+    if (!deadline) return;
+    const interval = setInterval(() => {
+      setDeadlinePassed(new Date() >= deadline);
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [deadline]);
+
+  // ── Load wishes on mount ───────────────────────────────────────────────
   useEffect(() => {
     setLoadingWishes(true);
     Promise.all([api.fetchWishes(), api.fetchProjectsCount()])
@@ -96,20 +144,21 @@ const ProjectAllocation = () => {
         raw.forEach((w) => {
           if (!teamMap[w.team_id]) {
             teamMap[w.team_id] = {
-              id: w.team_id,
-              leader: w.leader_name,
-              leaderEmail: w.leader_email,
+              id:            w.team_id,
+              leader:        w.leader_name,
+              leaderEmail:   w.leader_email,
+              average:       w.team_average,
               submittedDate: w.submitted_at
                 ? new Date(w.submitted_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
                 : "—",
-              status: w.status,
+              status:      w.status,
               preferences: [],
             };
           }
           teamMap[w.team_id].preferences.push({
-            priority: w.priority,
+            priority:    w.priority,
             projectName: w.project_title,
-            projectId: w.project_id,
+            projectId:   w.project_id,
           });
         });
 
@@ -123,7 +172,7 @@ const ProjectAllocation = () => {
       .finally(() => setLoadingWishes(false));
   }, []);
 
-  // Load results when tab = statistics
+  // ── Load results when tab = statistics ────────────────────────────────
   useEffect(() => {
     if (activeTab !== "statistics") return;
     setLoadingResults(true);
@@ -133,17 +182,20 @@ const ProjectAllocation = () => {
       .finally(() => setLoadingResults(false));
   }, [activeTab]);
 
-  // Load unassigned when tab = unassigned
+  // ── Load unassigned when tab = unassigned ─────────────────────────────
   useEffect(() => {
     if (activeTab !== "unassigned") return;
     setLoadingUnassigned(true);
     Promise.all([api.unassigned(), api.validatedProjects()])
-      .then(([u, p]) => { setUnassignedTeams(u.teams || []); setValidatedProjects(p.projects || []); })
+      .then(([u, p]) => {
+        setUnassignedTeams(u.teams || []);
+        setValidatedProjects(p.projects || []);
+      })
       .catch(() => setError("Impossible de charger les équipes non assignées."))
       .finally(() => setLoadingUnassigned(false));
   }, [activeTab]);
 
-  // Preview then open modal
+  // ── Preview then open modal ────────────────────────────────────────────
   const handleRunAutomaticAllocation = async () => {
     setError(""); setSuccess(""); setPreviewData(null);
     setPreviewing(true);
@@ -152,24 +204,36 @@ const ProjectAllocation = () => {
       if (data.message && !data.assignments) { setError(data.message); return; }
       setPreviewData(data);
       setShowAllocationModal(true);
-    } catch { setError("Erreur lors de la prévisualisation."); }
-    finally { setPreviewing(false); }
+    } catch {
+      setError("Erreur lors de la prévisualisation.");
+    } finally {
+      setPreviewing(false);
+    }
   };
 
-  // Confirm: run distribution
+  // ── Confirm: run distribution ──────────────────────────────────────────
   const handleConfirmAllocation = async () => {
     setRunning(true);
     try {
       const data = await api.run(selectedMode);
-      if (data.message && !data.assignments) { setError(data.message); setShowAllocationModal(false); return; }
+      if (data.message && !data.assignments) {
+        setError(data.message);
+        setShowAllocationModal(false);
+        return;
+      }
       setSuccess(`Distribution effectuée : ${data.total_assigned} équipes assignées, ${data.total_unassigned} non assignées.`);
       setShowAllocationModal(false);
+      navigate("/allocationresults");
       setActiveTab("statistics");
-    } catch { setError("Erreur lors de la distribution."); setShowAllocationModal(false); }
-    finally { setRunning(false); }
+    } catch {
+      setError("Erreur lors de la distribution.");
+      setShowAllocationModal(false);
+    } finally {
+      setRunning(false);
+    }
   };
 
-  // Manual assign
+  // ── Manual assign ──────────────────────────────────────────────────────
   const handleManualAssign = async (teamId) => {
     const projectId = selectedProject[teamId];
     if (!projectId) return;
@@ -180,32 +244,46 @@ const ProjectAllocation = () => {
       if (data.message?.includes("succès")) {
         setSuccess("Attribution manuelle effectuée avec succès !");
         setUnassignedTeams((prev) => prev.filter((t) => t.team_id !== teamId));
-      } else { setError(data.message || "Erreur lors de l'attribution."); }
-    } catch { setError("Erreur lors de l'attribution manuelle."); }
-    finally { setManualSaving((p) => ({ ...p, [teamId]: false })); }
+      } else {
+        setError(data.message || "Erreur lors de l'attribution.");
+      }
+    } catch {
+      setError("Erreur lors de l'attribution manuelle.");
+    } finally {
+      setManualSaving((p) => ({ ...p, [teamId]: false }));
+    }
   };
 
-  // Export CSV
+  // ── Export CSV ─────────────────────────────────────────────────────────
   const handleExportReport = () => {
     if (results.length === 0) { alert("Lancez d'abord la distribution."); return; }
     const csv = [
-      ["Team ID","Leader","Email","Project","Priority","Average","Mode","Date"],
-      ...results.map((r) => [r.team_id, r.leader_name, r.leader_email, r.project_title, r.assigned_priority, fmt(r.team_average), r.mode, new Date(r.assigned_at).toLocaleDateString("fr-FR")]),
+      ["Team ID", "Leader", "Email", "Project", "Priority", "Average", "Mode", "Date"],
+      ...results.map((r) => [
+        r.team_id, r.leader_name, r.leader_email, r.project_title,
+        r.assigned_priority, fmt(r.team_average), r.mode,
+        new Date(r.assigned_at).toLocaleDateString("fr-FR"),
+      ]),
     ].map((row) => row.join(",")).join("\n");
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "allocation_report.csv" });
+    const a = Object.assign(document.createElement("a"), {
+      href:     URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
+      download: "allocation_report.csv",
+    });
     a.click();
   };
 
-  const filteredTeams = teams.filter(
+  const filteredTeams   = teams.filter(
     (t) => t.leader?.toLowerCase().includes(searchQuery.toLowerCase()) || String(t.id).includes(searchQuery)
   );
-  const submittedTeams = filteredTeams.filter((t) => t.status === "SUBMITTED");
+  const submittedTeams  = filteredTeams.filter((t) => t.status === "SUBMITTED");
 
+  // ── RENDER ─────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
 
+        {/* Header */}
         <header className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -214,7 +292,8 @@ const ProjectAllocation = () => {
             </div>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input type="text" placeholder="Search Team" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              <input type="text" placeholder="Search Team" value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-12 pr-4 py-2 w-80 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]" />
             </div>
             <div className="ml-4">
@@ -225,18 +304,48 @@ const ProjectAllocation = () => {
 
         <main className="flex-1 p-8 overflow-auto">
 
+          {/* Error / Success banners */}
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl flex items-center gap-2">
-              <AlertCircle size={16} /> {error} <button className="ml-auto font-bold" onClick={() => setError("")}>✕</button>
+              <AlertCircle size={16} /> {error}
+              <button className="ml-auto font-bold" onClick={() => setError("")}>✕</button>
             </div>
           )}
           {success && (
             <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl flex items-center gap-2">
-              <CheckCircle size={16} /> {success} <button className="ml-auto font-bold" onClick={() => setSuccess("")}>✕</button>
+              <CheckCircle size={16} /> {success}
+              <button className="ml-auto font-bold" onClick={() => setSuccess("")}>✕</button>
             </div>
           )}
 
-          {/* Mode + actions */}
+          {/* Deadline warning banners */}
+          {!deadline && (
+            <div className="mb-4 px-4 py-3 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded-xl flex items-center gap-2">
+              <AlertCircle size={16} />
+              No deadline has been set yet. Please set a deadline before running allocation.
+            </div>
+          )}
+          {deadline && !deadlinePassed && (
+            <div className="mb-4 px-4 py-3 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded-xl flex items-center gap-2">
+              <AlertCircle size={16} />
+              Automatic allocation is locked until the student submission deadline passes.{" "}
+              <span className="font-semibold ml-1">
+                Deadline:{" "}
+                {deadline.toLocaleString("en-GB", {
+                  day: "numeric", month: "long", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </span>
+            </div>
+          )}
+          {deadline && deadlinePassed && (
+            <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl flex items-center gap-2">
+              <CheckCircle size={16} />
+              The submission deadline has passed. You can now run the automatic allocation.
+            </div>
+          )}
+
+          {/* Mode + action buttons */}
           <div className="flex items-center gap-4 mb-6 flex-wrap">
             <div className="flex gap-2 bg-white border border-gray-200 rounded-lg p-1">
               {[
@@ -252,8 +361,17 @@ const ProjectAllocation = () => {
               ))}
             </div>
 
-            <button onClick={handleRunAutomaticAllocation} disabled={previewing || running}
-              className="flex items-center gap-2 bg-gradient-to-r from-[#18335E] to-[#2D8FBF] hover:from-[#152a4d] hover:to-[#2575a0] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg font-medium transition-all shadow-sm">
+            <button
+              onClick={handleRunAutomaticAllocation}
+              disabled={previewing || running || !deadlinePassed}
+              title={
+                !deadline
+                  ? "No deadline set"
+                  : !deadlinePassed
+                  ? `Locked until deadline: ${deadline.toLocaleString("en-GB")}`
+                  : ""
+              }
+              className="flex items-center gap-2 bg-gradient-to-r from-[#18335E] to-[#2D8FBF] hover:from-[#152a4d] hover:to-[#2575a0] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg font-medium transition-all shadow-sm">
               {previewing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
               {previewing ? "Prévisualisation…" : "Run automatic allocation"}
             </button>
@@ -267,16 +385,17 @@ const ProjectAllocation = () => {
           {/* Tabs */}
           <div className="flex gap-2 mb-6 border-b border-gray-200">
             {[
-              { key: "teams",      label: "Teams",      icon: Users,        count: submittedTeams.length },
-              { key: "unassigned", label: "Unassigned", icon: AlertCircle,  count: unassignedTeams.length },
-              { key: "statistics", label: "Results",    icon: TrendingUp,   count: null },
+              { key: "teams",      label: "Teams",      icon: Users,       count: submittedTeams.length },
+              { key: "unassigned", label: "Unassigned", icon: AlertCircle, count: unassignedTeams.length },
+              { key: "statistics", label: "Statistics",  icon: TrendingUp,  count: null },
             ].map(({ key, label, icon: Icon, count }) => (
               <button key={key} onClick={() => { setActiveTab(key); setError(""); setSuccess(""); }}
                 className={`flex items-center gap-2 px-4 py-2 font-medium text-sm transition-colors border-b-2
                   ${activeTab === key ? "border-[#1e3a5f] text-[#1e3a5f]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
                 <Icon size={16} /> {label}
                 {count != null && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${activeTab === key ? "bg-[#1e3a5f] text-white" : "bg-gray-100 text-gray-500"}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold
+                    ${activeTab === key ? "bg-[#1e3a5f] text-white" : "bg-gray-100 text-gray-500"}`}>
                     {count}
                   </span>
                 )}
@@ -291,7 +410,9 @@ const ProjectAllocation = () => {
               <p className="text-gray-500 text-sm mb-6">View the preferences submitted by teams</p>
 
               {loadingWishes ? (
-                <div className="flex justify-center py-16"><Loader2 size={28} className="animate-spin text-[#2D8FBF]" /></div>
+                <div className="flex justify-center py-16">
+                  <Loader2 size={28} className="animate-spin text-[#2D8FBF]" />
+                </div>
               ) : submittedTeams.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-gray-300">
                   <Users size={48} className="mb-3" />
@@ -305,12 +426,16 @@ const ProjectAllocation = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-4 mb-2 flex-wrap">
                             <h4 className="text-lg font-semibold text-[#1e3a5f]">Équipe #{team.id}</h4>
-                            <div className="flex items-center gap-1 text-sm text-gray-600"><Star size={16} /><span>{team.leader}</span></div>
-                            <div className="flex items-center gap-1 text-sm text-gray-600"><Calendar size={16} /><span>Submitted on {team.submittedDate}</span></div>
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <Star size={16} /><span>{team.leader}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <Calendar size={16} /><span>Submitted on {team.submittedDate}</span>
+                            </div>
                           </div>
                           <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
                             <Award size={16} className="text-blue-600" />
-                            <span className="text-blue-700 font-medium text-sm">{team.leaderEmail}</span>
+                            <span className="text-blue-700 font-medium text-sm">Average: {fmt(team.average)}</span>
                           </div>
                         </div>
                       </div>
@@ -344,14 +469,22 @@ const ProjectAllocation = () => {
                   <h3 className="font-semibold text-[#1e3a5f]">Attribution manuelle</h3>
                   <p className="text-xs text-gray-400 mt-0.5">Équipes ayant soumis leurs voeux mais non encore assignées</p>
                 </div>
-                <button onClick={() => { setLoadingUnassigned(true); Promise.all([api.unassigned(), api.validatedProjects()]).then(([u, p]) => { setUnassignedTeams(u.teams || []); setValidatedProjects(p.projects || []); }).finally(() => setLoadingUnassigned(false)); }}
+                <button
+                  onClick={() => {
+                    setLoadingUnassigned(true);
+                    Promise.all([api.unassigned(), api.validatedProjects()])
+                      .then(([u, p]) => { setUnassignedTeams(u.teams || []); setValidatedProjects(p.projects || []); })
+                      .finally(() => setLoadingUnassigned(false));
+                  }}
                   className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#1e3a5f]">
                   <RefreshCw size={13} /> Actualiser
                 </button>
               </div>
 
               {loadingUnassigned ? (
-                <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-[#2D8FBF]" /></div>
+                <div className="flex justify-center py-16">
+                  <Loader2 size={24} className="animate-spin text-[#2D8FBF]" />
+                </div>
               ) : unassignedTeams.length === 0 ? (
                 <div className="flex flex-col items-center py-16">
                   <CheckCircle size={48} className="mb-3 text-green-300" />
@@ -365,18 +498,24 @@ const ProjectAllocation = () => {
                         <p className="font-medium text-gray-800">{team.leader_name}</p>
                         <p className="text-xs text-gray-400">{team.leader_email}</p>
                         <div className="flex gap-3 mt-1">
-                          <span className="text-xs text-gray-500 flex items-center gap-1"><Users size={11} /> {team.team_size} membre{team.team_size > 1 ? "s" : ""}</span>
+                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <Users size={11} /> {team.team_size} membre{team.team_size > 1 ? "s" : ""}
+                          </span>
                           <span className="text-xs text-gray-500">Moy: {fmt(team.team_average)}</span>
                         </div>
                       </div>
-                      <select value={selectedProject[team.team_id] || ""} onChange={(e) => setSelectedProject((p) => ({ ...p, [team.team_id]: e.target.value }))}
+                      <select
+                        value={selectedProject[team.team_id] || ""}
+                        onChange={(e) => setSelectedProject((p) => ({ ...p, [team.team_id]: e.target.value }))}
                         className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1e3a5f] w-64">
                         <option value="">-- Choisir un projet --</option>
                         {validatedProjects.map((p) => (
                           <option key={p.id} value={p.id}>{p.title} (max {p.max_students})</option>
                         ))}
                       </select>
-                      <button onClick={() => handleManualAssign(team.team_id)} disabled={!selectedProject[team.team_id] || manualSaving[team.team_id]}
+                      <button
+                        onClick={() => handleManualAssign(team.team_id)}
+                        disabled={!selectedProject[team.team_id] || manualSaving[team.team_id]}
                         className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white text-sm font-medium rounded-lg disabled:opacity-40">
                         {manualSaving[team.team_id] ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
                         Assigner
@@ -393,14 +532,20 @@ const ProjectAllocation = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="font-semibold text-[#1e3a5f]">Résultats de la distribution</h3>
-                <button onClick={() => { setLoadingResults(true); api.results().then((d) => setResults(d.results || [])).finally(() => setLoadingResults(false)); }}
+                <button
+                  onClick={() => {
+                    setLoadingResults(true);
+                    api.results().then((d) => setResults(d.results || [])).finally(() => setLoadingResults(false));
+                  }}
                   className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#1e3a5f]">
                   <RefreshCw size={13} /> Actualiser
                 </button>
               </div>
 
               {loadingResults ? (
-                <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-[#2D8FBF]" /></div>
+                <div className="flex justify-center py-16">
+                  <Loader2 size={24} className="animate-spin text-[#2D8FBF]" />
+                </div>
               ) : results.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-gray-300">
                   <TrendingUp size={48} className="mb-3" />
@@ -432,7 +577,9 @@ const ProjectAllocation = () => {
                             <p className="text-xs text-gray-400">Max {r.max_students}</p>
                           </td>
                           <td className="px-6 py-3 text-center">
-                            <span className="flex items-center justify-center gap-1 text-gray-600"><Users size={13} />{r.team_size}</span>
+                            <span className="flex items-center justify-center gap-1 text-gray-600">
+                              <Users size={13} />{r.team_size}
+                            </span>
                           </td>
                           <td className="px-6 py-3 text-center font-medium text-[#1e3a5f]">{fmt(r.team_average)}</td>
                           <td className="px-6 py-3 text-center"><PriorityBadge priority={r.assigned_priority} /></td>

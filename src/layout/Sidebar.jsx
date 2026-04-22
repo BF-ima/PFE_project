@@ -10,10 +10,8 @@ export const MENU_ITEMS = [
   { icon: LayoutGrid, path: '/projectsdashboard', label: 'Dashboard' },
   { icon: UserRoundCog, path: '/accountsmanage', label: 'User Accounts Management' },
   { icon: UsersRound, path: '/teamsallocation', label: 'Manage Teams & Project Choices' },
-  { icon: MessageCircle, path: '/messaging', label: 'Messaging' },
   { icon: Bell, path: '/admin-notifications', label: 'Notifications' },
   { icon: Building2, path: '/academicentitymanage', label: 'Academic Entity Management' },
-  { icon: FileCheckCorner, path: '/proposalreview', label: 'Proposal Review' },
   { icon: GraduationCap, path: '/defense-manage', label: 'Defense Management' },
   { icon: ChartColumn, path: '/statistics', label: 'Statistics' },
 ];

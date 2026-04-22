@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState , useEffect } from 'react';
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
 import { Facebook, Linkedin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -12,10 +12,16 @@ function AddProjectPage() {
     title:       '',
     maxStudents: '',
     description: '',
+    specialityId: '',
   });
 
   const [error,       setError]       = useState('');
   const [isLoading,   setIsLoading]   = useState(false);
+
+const [specialities, setSpecialities] = useState([]);
+
+
+
 
   // ==================== DONNÉES UTILISATEUR ====================
 const { currentUser } = useCurrentUser();
@@ -31,10 +37,10 @@ const { currentUser } = useCurrentUser();
     e.preventDefault();
     setError('');
 
-    if (!formData.title || !formData.maxStudents || !formData.description) {
-      setError('Please fill in all required fields (*)');
-      return;
-    }
+    if (!formData.title || !formData.maxStudents || !formData.description || !formData.specialityId) {
+  setError('Please fill in all required fields (*)');
+  return;
+}
 
     if (parseInt(formData.maxStudents) < 1 || parseInt(formData.maxStudents) > 10) {
       setError('Max students must be between 1 and 10');
@@ -55,6 +61,7 @@ const { currentUser } = useCurrentUser();
           title:        formData.title,
           max_students: parseInt(formData.maxStudents),
           description:  formData.description,
+          speciality_id: parseInt(formData.specialityId),
         }),
       });
 
@@ -87,6 +94,18 @@ const { currentUser } = useCurrentUser();
     sessionStorage.clear();
     navigate('/login');
   };
+
+
+useEffect(() => {
+  const token = localStorage.getItem('token');
+  fetch('http://localhost:3000/api/specialities', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(r => r.json())
+    .then(d => setSpecialities(d || []))
+    .catch(console.error);
+}, []);
+
 
 
   return (
@@ -178,7 +197,7 @@ const { currentUser } = useCurrentUser();
                   {/* MAX STUDENTS */}
                   <div className="flex items-center mb-4">
                     <label className="w-32 text-xs font-medium text-[#1e3a5f]">
-                      Max Students: <span className="text-red-500">*</span>
+                      Max Teams: <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -192,6 +211,30 @@ const { currentUser } = useCurrentUser();
                       placeholder="Enter maximum number of students"
                     />
                   </div>
+
+                                    {/* SPECIALITY */}
+<div className="flex items-center mb-4">
+  <label className="w-32 text-xs font-medium text-[#1e3a5f]">
+    Speciality: <span className="text-red-500">*</span>
+  </label>
+  <select
+    name="specialityId"
+    value={formData.specialityId}
+    onChange={handleChange}
+    required
+    className="flex-1 max-w-xs px-3 py-1.5 text-sm bg-[#f5f6f8] border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] focus:border-transparent"
+  >
+    
+    <option value="" className='text-gray-500'>Select a speciality...</option>
+    
+    {specialities.map(s => (
+      <option key={s.id} value={s.id}>
+        {s.name}
+      </option>
+    ))}
+  </select>
+</div>
+
 
                   {/* DESCRIPTION */}
                   <div className="flex mb-5">

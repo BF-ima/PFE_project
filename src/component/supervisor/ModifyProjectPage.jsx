@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ProfileDropdown } from './HomePage'; 
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
@@ -10,14 +10,31 @@ function ModifyProjectPage() {
   const location    = useLocation();
   const projectData = location.state?.project;
 
+
+  const [specialities, setSpecialities] = useState([]);
+
+useEffect(() => {
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:3000/api/specialities', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => setSpecialities(d || []))
+      .catch(console.error);
+    }, []);
+
+
+  
   const [formData, setFormData] = useState({
     title:       projectData?.title        || '',
     maxStudents: projectData?.max_students || '',
     description: projectData?.description  || '',
+    specialityId: projectData?.speciality_name  || '',
   });
 
   const [error,     setError]     = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
 
   const { currentUser } = useCurrentUser();
 
@@ -30,7 +47,7 @@ function ModifyProjectPage() {
     e.preventDefault();
     setError('');
 
-    if (!formData.title || !formData.maxStudents || !formData.description) {
+    if (!formData.title || !formData.maxStudents || !formData.description || !formData.specialityId) {
       setError('Please fill in all required fields (*)');
       return;
     }
@@ -39,6 +56,7 @@ function ModifyProjectPage() {
       setError('Max students must be between 1 and 10');
       return;
     }
+
 
     setIsLoading(true);
     try {
@@ -53,6 +71,7 @@ function ModifyProjectPage() {
           title:        formData.title,
           max_students: parseInt(formData.maxStudents),
           description:  formData.description,
+          speciality_id: parseInt(formData.specialityId),
         }),
       });
 
@@ -81,10 +100,11 @@ function ModifyProjectPage() {
     navigate('/login');
   };
 
-  // ← NO handleChangePassword needed here
-  // ProfileDropdown from HomePage handles it internally now
+  
 
   if (!projectData) return null;
+
+
 
   return (
     <div className="flex h-screen bg-[#f5f6f8] overflow-hidden">
@@ -155,13 +175,36 @@ function ModifyProjectPage() {
 
                   <div className="flex items-center mb-4">
                     <label className="w-32 text-xs font-medium text-[#1e3a5f]">
-                      Max Students: <span className="text-red-500">*</span>
+                      Max Teams: <span className="text-red-500">*</span>
                     </label>
                     <input type="number" name="maxStudents" value={formData.maxStudents} onChange={handleChange}
                       required min="1" max="10"
                       className="flex-1 max-w-xs px-3 py-1.5 text-sm bg-[#f5f6f8] border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] focus:border-transparent"
                       placeholder="Enter maximum number of students" />
                   </div>
+
+                                    {/* SPECIALITY */}
+<div className="flex items-center mb-4">
+  <label className="w-32 text-xs font-medium text-[#1e3a5f]">
+    Speciality: <span className="text-red-500">*</span>
+  </label>
+  <select
+    name="specialityId"
+    value={formData.specialityId}
+    onChange={handleChange}
+    required
+    className="flex-1 max-w-xs px-3 py-1.5 text-sm bg-[#f5f6f8] border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] focus:border-transparent"
+  >
+    
+    <option value="" className='text-gray-500'>Select a speciality...</option>
+    
+    {specialities.map(s => (
+      <option key={s.id} value={s.id}>
+        {s.name}
+      </option>
+    ))}
+  </select>
+</div>
 
                   <div className="flex mb-5">
                     <label className="w-32 text-xs font-medium text-[#1e3a5f] pt-2">

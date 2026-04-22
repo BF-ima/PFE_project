@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../../layout/Sidebar.jsx";
-import { ProfileDropdown } from '../supervisor/HomePage';
+import Sidebar from "../../layout/Sidebar.jsx";import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
+
 import DeadlineSettingsModal from "../../layout/DeadlineSettingsModal.jsx";
 import {
   Search,
@@ -22,12 +22,7 @@ const TeamsAllocation = () => {
   // User actuel
   const { currentUser } = useCurrentUser();
 
-  // Données mockées pour les statistiques
-  const [stats] = useState({
-    totalTeams: 24,
-    projectsAllocated: 18,
-    pendingAllocations: 6,
-  });
+
 
   // Handlers
   const handleLogout = () => {
@@ -200,63 +195,6 @@ const TeamsAllocation = () => {
                   Manage Deadline
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Stats Section */}
-          <div className="max-w-6xl mx-auto">
-            <h3 className="text-lg font-semibold text-[#1e3a5f] mb-4">
-              Quick Overview
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Total Teams */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm mb-1">Total Teams</p>
-                    <p className="text-3xl font-bold text-[#1e3a5f]">
-                      {stats.totalTeams}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Users className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Projects Allocated */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm mb-1">
-                      Projects Allocated
-                    </p>
-                    <p className="text-3xl font-bold text-[#1e3a5f]">
-                      {stats.projectsAllocated}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                    <Award className="w-6 h-6 text-purple-600" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Pending Allocations */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm mb-1">
-                      Pending Allocations
-                    </p>
-                    <p className="text-3xl font-bold text-[#1e3a5f]">
-                      {stats.pendingAllocations}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <Clock className="w-6 h-6 text-yellow-600" />
-                  </div>
-                </div>
               </div>
             </div>
           </div>

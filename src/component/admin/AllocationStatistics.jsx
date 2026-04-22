@@ -1,26 +1,17 @@
 import React from "react";
 import { TrendingUp, Users, Award, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 
-const AllocationStatistics = ({ teams, projects = [] }) => {
-  // Calculer les statistiques
-  const assignedCount = teams.filter((t) => t.status === "assigned").length;
-  const unassignedCount = teams.filter((t) => t.status === "unassigned").length;
-  const totalCount = teams.length;
-  const allocationRate = totalCount > 0 ? Math.round((assignedCount / totalCount) * 100) : 0;
+const AllocationStatistics = ({ teams, projects = [], statistics }) => {
 
-  // Calculer le taux de satisfaction
-  const firstChoiceCount = teams.filter((t) =>
-    t.preferences?.some((p) => p.matched && p.priority === 1)
-  ).length;
-  const secondChoiceCount = teams.filter((t) =>
-    t.preferences?.some((p) => p.matched && p.priority === 2)
-  ).length;
-  const thirdChoiceCount = teams.filter((t) =>
-    t.preferences?.some((p) => p.matched && p.priority >= 3)
-  ).length;
-  const satisfactionRate =
-    totalCount > 0 ? Math.round((firstChoiceCount / totalCount) * 100) : 0;
-
+  const assignedCount     = statistics?.assigned_teams    ?? teams.filter(t => t.status === "assigned").length;
+  const unassignedCount   = statistics?.unassigned_teams  ?? teams.filter(t => t.status === "unassigned").length;
+  const totalCount        = statistics?.total_teams       ?? teams.length;
+  const allocationRate    = statistics?.allocation_rate   ?? 0;
+  const satisfactionRate  = statistics?.satisfaction_rate ?? 0;
+  const firstChoiceCount  = statistics?.first_choice      ?? 0;
+  const secondChoiceCount = statistics?.second_choice     ?? 0;
+  const thirdChoiceCount  = statistics?.third_choice_plus ?? 0;
+  const projectDistribution = statistics?.project_distribution ?? [];
   return (
     <div className="space-y-6">
       {/* Stats Cards - Top Row */}
@@ -162,37 +153,39 @@ const AllocationStatistics = ({ teams, projects = [] }) => {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Project
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Number of conflicts
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Assigned Team
-                </th>
-              </tr>
-            </thead>
+  <tr>
+    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Project</th>
+    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teams Assigned</th>
+    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Max Capacity</th>
+    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+  </tr>
+</thead>
             <tbody className="divide-y divide-gray-100">
-              {projects && projects.length > 0 ? (
-                projects.map((project, index) => (
-                  <tr key={project?.id || index}>
-                    <td className="px-6 py-4 text-sm text-gray-700">
-                      {project?.name || "Project name"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">n</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">ID</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
-                    No project data available
-                  </td>
-                </tr>
-              )}
-            </tbody>
+  {projectDistribution.length > 0 ? (
+    projectDistribution.map((p) => (
+      <tr key={p.project_id}>
+        <td className="px-6 py-4 text-sm font-medium text-gray-800">{p.project_title}</td>
+        <td className="px-6 py-4 text-sm text-gray-600">{p.assigned_teams}</td>
+        <td className="px-6 py-4 text-sm text-gray-600">{p.max_students}</td>
+        <td className="px-6 py-4">
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+            p.assigned_teams >= p.max_students
+              ? "bg-red-100 text-red-700"
+              : "bg-green-100 text-green-700"
+          }`}>
+            {p.assigned_teams >= p.max_students ? "Full" : "Available"}
+          </span>
+        </td>
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td colSpan="4" className="px-6 py-8 text-center text-gray-400">
+        No data available
+      </td>
+    </tr>
+  )}
+</tbody>
           </table>
         </div>
       </div>

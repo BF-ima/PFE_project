@@ -1,220 +1,357 @@
 // src/component/supervisor/ChatPage.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
 import { ProfileDropdown } from './HomePage';
-import { Facebook, Linkedin, Search, Paperclip, Send, CheckCheck } from 'lucide-react';
+import useCurrentUser from '../../hooks/useCurrentUser';
+import {
+  Facebook, Linkedin, Search, Paperclip, Send,
+  CheckCheck, Loader2, Users, GraduationCap,
+} from 'lucide-react';
 
-// displays user avatar 
-const Avatar = ({ name, size = 38, online = false }) => {
-  const letter = name ? name.charAt(0).toUpperCase() : '?';
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div
-        className="rounded-full flex items-center justify-center text-white font-semibold"
-        style={{
-          width: size,
-          height: size,
-          fontSize: size * 0.4,
-          background: 'linear-gradient(135deg, #18335E, #2D8FBF)',
-        }}
-      >
-        {letter}
-      </div>
-      {online && (
-        <span
-          className="absolute bottom-0 right-0 rounded-full border-2 border-white"
-          style={{ width: 10, height: 10, backgroundColor: '#4CAF50' }}
-        />
+// ── Base URLs ──────────────────────────────────────────────────────────────
+const BASE       = 'http://localhost:3000/api/messages';
+const SERVER_URL = 'http://localhost:3000';
+
+// ── Auth header ────────────────────────────────────────────────────────────
+const authHeader = () => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${localStorage.getItem('token')}`,
+});
+
+// ── Generic request helper ─────────────────────────────────────────────────
+const request = async (method, url, body = null) => {
+  const options = { method, headers: authHeader() };
+  if (body) options.body = JSON.stringify(body);
+  const r    = await fetch(url, options);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.message || 'Erreur serveur');
+  return data;
+};
+
+// ── API calls (same endpoints as student) ─────────────────────────────────
+const api = {
+  fetchConversations: ()                 => request('GET',   `${BASE}/conversations`),
+  fetchMessages:      (convId)           => request('GET',   `${BASE}/${convId}`),
+  sendMessage:        (conv_id, content) => request('POST',  BASE, { conv_id, content }),
+  markAsRead:         (convId)           => request('PATCH', `${BASE}/${convId}/read`),
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const formatTime = (str) => {
+  if (!str) return '';
+  return new Date(str).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const resolveUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('blob:')) return url;
+  return url;
+};
+
+// ── Avatar ─────────────────────────────────────────────────────────────────
+const Avatar = ({ name, size = 38 }) => (
+  <div
+    className="rounded-full flex items-center justify-center text-white font-semibold shrink-0"
+    style={{
+      width: size, height: size,
+      fontSize: size * 0.4,
+      background: 'linear-gradient(135deg, #18335E, #2D8FBF)',
+    }}
+  >
+    {(name || '?').charAt(0).toUpperCase()}
+  </div>
+);
+
+// ── Group icon (supervisor sees team_supervisor groups) ────────────────────
+const GroupIcon = ({ size = 16 }) => (
+  <div
+    className="rounded-full flex items-center justify-center text-white shrink-0"
+    style={{
+      width: size * 2.2, height: size * 2.2,
+      background: 'linear-gradient(135deg, #1e5f3a, #2DBF7A)',
+    }}
+  >
+    <GraduationCap size={size} />
+  </div>
+);
+
+// ── Members avatars strip ──────────────────────────────────────────────────
+const MembersList = ({ members }) => (
+  <div className="flex items-center gap-2">
+    <div className="flex -space-x-2">
+      {members.slice(0, 4).map((m) => (
+        <div
+          key={m.id}
+          title={m.name}
+          className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-bold"
+          style={{ background: 'linear-gradient(135deg, #18335E, #2D8FBF)' }}
+        >
+          {(m.name || '?').charAt(0).toUpperCase()}
+        </div>
+      ))}
+      {members.length > 4 && (
+        <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-gray-500 text-[9px] font-bold">
+          +{members.length - 4}
+        </div>
       )}
     </div>
-  );
+    <span className="text-xs text-gray-400">
+      {members.length} participant{members.length > 1 ? 's' : ''}
+    </span>
+  </div>
+);
+
+// ── Message bubble content ─────────────────────────────────────────────────
+const MessageContent = ({ msg, isMe }) => {
+  if (msg._uploading) {
+    return (
+      <span className="flex items-center gap-2 opacity-60 text-sm">
+        <Loader2 size={13} className="animate-spin" />
+        Envoi en cours...
+      </span>
+    );
+  }
+
+  if (msg.file_type === 'image') {
+    const url = resolveUrl(msg.content);
+    return (
+      <img
+        src={url}
+        alt={msg.file_name || 'image'}
+        className="max-w-full rounded-md max-h-48 object-contain cursor-pointer"
+        onClick={() => window.open(url, '_blank')}
+      />
+    );
+  }
+
+  if (msg.file_type === 'file') {
+    const url = resolveUrl(msg.content);
+    const ext = (msg.file_name || '').split('.').pop().toUpperCase();
+    const downloadUrl = `${SERVER_URL}/api/messages/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(msg.file_name || 'fichier')}`;
+
+    return (
+      <a
+        href={downloadUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 p-2 rounded-lg no-underline"
+        style={{
+          background: isMe ? 'rgba(255,255,255,0.15)' : '#F3F4F6',
+          minWidth: 180,
+        }}
+      >
+      
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+          style={{
+            background:
+              ext === 'PDF' ? '#e53e3e' :
+              ext === 'DOCX' || ext === 'DOC' ? '#2b6cb0' : '#718096',
+          }}
+        >
+          {ext}
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span
+            className="text-sm font-medium truncate"
+            style={{ color: isMe ? '#fff' : '#1F2937', maxWidth: 140 }}
+          >
+            {msg.file_name || 'Fichier'}
+          </span>
+          <span className="text-xs" style={{ color: isMe ? 'rgba(255,255,255,0.7)' : '#6B7280' }}>
+            
+            Appuyer pour télécharger
+          </span>
+        </div>
+      </a>
+    );
+  }
+
+  return <span className="text-sm leading-relaxed">{msg.content}</span>;
 };
 
-// Formats file size from bytes to human readable format (B, KB, MB)
-const formatFileSize = (bytes) => {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-};
-
-// ==================== MOCK DATA ====================
-const CONVERSATIONS = [
-  {
-    id: 1,
-    name: 'Student A',
-    time: '10:15',
-    lastMessage: 'Thanks for the update',
-    unread: 1,
-    online: true,
-    messages: [
-      { id: 1, from: 'them', text: 'Hey, did you get the latest project files?', time: '10:00', read: true },
-      { id: 2, from: 'me',   text: 'Yes, I reviewed them this morning. Everything looks good!', time: '10:03', read: true },
-      { id: 3, from: 'them', text: 'Thanks for the update', time: '10:15', read: true },
-    ],
-  },
-  {
-    id: 2,
-    name: 'Student B',
-    time: '09:15',
-    lastMessage: 'tomorrow',
-    unread: 1,
-    online: false,
-    messages: [
-      { id: 1, from: 'them', text: 'Are we meeting tomorrow?', time: '09:10', read: true },
-      { id: 2, from: 'me',   text: 'tomorrow', time: '09:15', read: false },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Student C',
-    time: '10:16',
-    lastMessage: 'We will meet',
-    unread: 0,
-    online: false,
-    messages: [
-      { id: 1, from: 'them', text: 'Can we schedule a call?', time: '10:14', read: true },
-      { id: 2, from: 'me',   text: 'We will meet', time: '10:16', read: true },
-    ],
-  },
-];
-
-// ==================== MAIN CHAT COMPONENT ====================
+// ── Main component ─────────────────────────────────────────────────────────
 const ChatPage = () => {
   const navigate = useNavigate();
+  const { currentUser } = useCurrentUser();
 
-  // Mock current user data (Supervisor)
-  const [currentUser] = useState({
-    id: 1,
-    firstName: 'Supervisor',
-    lastName: '',
-    email: 'supervisor@esi-sba.dz',
-    role: 'Supervisor',
-  });
+  const [conversations, setConversations] = useState([]);
+  const [messages,      setMessages]      = useState([]);
+  const [activeId,      setActiveId]      = useState(null);
+  const [searchQuery,   setSearchQuery]   = useState('');
+  const [input,         setInput]         = useState('');
+  const [loadingConvs,  setLoadingConvs]  = useState(true);
+  const [loadingMsgs,   setLoadingMsgs]   = useState(false);
+  const [sending,       setSending]       = useState(false);
+  const [error,         setError]         = useState('');
 
-  const [conversations, setConversations] = useState(CONVERSATIONS);
-  const [activeId, setActiveId] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const fileInputRef   = useRef(null);
+  const pollRef        = useRef(null);
 
-  const activeConv = conversations.find(c => c.id === activeId);
+  const activeConv = conversations.find((c) => c.id === activeId) || null;
+
+  // ── Load conversations ─────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingConvs(true);
+
+    api.fetchConversations()
+      .then((data) => {
+        if (cancelled) return;
+        const convs = data.conversations || [];
+        setConversations(convs);
+        if (convs.length > 0) setActiveId(convs[0].id);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || 'Impossible de charger les conversations.');
+      })
+      .finally(() => { if (!cancelled) setLoadingConvs(false); });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Load messages + poll every 3s ─────────────────────────────────────
+  const loadMessages = useCallback((convId, silent = false) => {
+    if (!convId) return;
+    if (!silent) setLoadingMsgs(true);
+
+    api.fetchMessages(convId)
+      .then((data) => {
+        setMessages(data.messages || []);
+        setConversations((prev) =>
+          prev.map((c) => c.id === convId ? { ...c, unread: 0 } : c)
+        );
+      })
+      .catch((err) => {
+        if (!silent) setError(err.message || 'Impossible de charger les messages.');
+      })
+      .finally(() => { if (!silent) setLoadingMsgs(false); });
+  }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeId, activeConv?.messages?.length]);
+    if (!activeId) return;
+    loadMessages(activeId);
+    pollRef.current = setInterval(() => loadMessages(activeId, true), 3000);
+    return () => clearInterval(pollRef.current);
+  }, [activeId, loadMessages]);
 
+  // ── Auto-scroll ────────────────────────────────────────────────────────
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────
   const handleLogout = () => {
     localStorage.removeItem('token');
-    sessionStorage.clear();
     navigate('/login');
   };
 
-  const handleChangePassword = (formData) => {
-    console.log('🔐 Password change:', formData);
+  const handleChangePassword = (f) => console.log('pwd change', f);
+
+  const handleSelectConv = (convId) => {
+    if (convId === activeId) return;
+    clearInterval(pollRef.current);
+    setMessages([]);
+    setActiveId(convId);
+    api.markAsRead(convId).catch(() => {});
   };
 
-  const handleSelectConv = (id) => {
-    setConversations(prev =>
-      prev.map(c => c.id === id ? { ...c, unread: 0 } : c)
-    );
-    setActiveId(id);
-  };
-
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
-    if (!text) return;
-
-    const newMsg = {
-      id: Date.now(),
-      from: 'me',
-      text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      read: true,
-    };
-
-    setConversations(prev =>
-      prev.map(c =>
-        c.id === activeId
-          ? { ...c, messages: [...c.messages, newMsg], lastMessage: text }
-          : c
-      )
-    );
+    if (!text || !activeId || sending) return;
+    setSending(true);
     setInput('');
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    try {
+      const data = await api.sendMessage(activeId, text);
+      if (data.message) {
+        setMessages((prev) => [...prev, data.message]);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? { ...c, lastMessage: text, time: data.message.created_at }
+              : c
+          )
+        );
+      }
+    } catch (err) {
+      setError(err.message || "Échec de l'envoi.");
+      setInput(text);
+    } finally {
+      setSending(false);
     }
   };
 
-  const handleAttachmentClick = () => {
-    fileInputRef.current?.click();
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const handleFileChange = (e) => {
+  // ── File upload ────────────────────────────────────────────────────────
+  const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
-    if (!files.length) return;
+    e.target.value = '';
 
-    files.forEach(file => {
-      const fileURL = URL.createObjectURL(file);
+    for (const file of files) {
       const isImage = file.type.startsWith('image/');
-      const fileSize = formatFileSize(file.size);
-      let messageText = '';
-      let messageAttachment = null;
+      const tempId  = `local-${Date.now()}-${Math.random()}`;
+      const tempUrl = URL.createObjectURL(file);
 
-      if (isImage) {
-        messageAttachment = { type: 'image', url: fileURL, name: file.name, size: fileSize };
-        messageText = file.name;
-      } else {
-        messageAttachment = { type: 'file', url: fileURL, name: file.name, size: fileSize, mimeType: file.type };
-        messageText = file.name;
+      setMessages((prev) => [...prev, {
+        id:          tempId,
+        sender_id:   currentUser?.id,
+        sender_name: `${currentUser?.firstName} ${currentUser?.lastName}`.trim(),
+        content:     tempUrl,
+        file_name:   file.name,
+        file_type:   isImage ? 'image' : 'file',
+        is_read:     0,
+        created_at:  new Date().toISOString(),
+        _uploading:  true,
+      }]);
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('conv_id', activeId);
+
+        const r = await fetch(`${SERVER_URL}/api/messages/upload`, {
+          method:  'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          body:    formData,
+        });
+
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.message || "Échec de l'envoi du fichier.");
+
+        setMessages((prev) => prev.map((m) => m.id === tempId ? { ...data.message } : m));
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? { ...c, lastMessage: isImage ? '📷 Image' : `📎 ${file.name}`, time: data.message.created_at }
+              : c
+          )
+        );
+      } catch (err) {
+        setError(err.message || "Échec de l'envoi du fichier.");
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
-
-      const newMsg = {
-        id: Date.now() + Math.random(),
-        from: 'me',
-        text: messageText,
-        attachment: messageAttachment,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        read: true,
-      };
-
-      setConversations(prev =>
-        prev.map(c =>
-          c.id === activeId
-            ? { ...c, messages: [...c.messages, newMsg], lastMessage: messageText }
-            : c
-        )
-      );
-    });
-    fileInputRef.current.value = '';
+    }
   };
 
-  const filteredConvs = conversations.filter(c =>
+  const filteredConvs = conversations.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
+      <style>{`.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}`}</style>
 
       <SupervisorSidebar />
 
       <div className="flex-1 flex flex-col ml-16 overflow-hidden">
 
+        {/* Header */}
         <header className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-2 sm:py-3 shrink-0">
           <div className="flex items-center justify-between">
             <div>
@@ -222,150 +359,182 @@ const ChatPage = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a 
-                href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="Facebook"
-              >
-                <Facebook size={14} className="sm:w-5 sm:h-5" />
+              <a href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v"
+                target="_blank" rel="noopener noreferrer"
+                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm">
+                <Facebook size={14} />
               </a>
-              <a 
-                href="https://www.linkedin.com/in/https%3A%2F%2Fwww.linkedin.com%2Fschool%2Fesisba" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="LinkedIn"
-              >
-                <Linkedin size={14} className="sm:w-5 sm:h-5" />
+              <a href="https://www.linkedin.com/school/esisba"
+                target="_blank" rel="noopener noreferrer"
+                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm">
+                <Linkedin size={14} />
               </a>
-              <ProfileDropdown user={currentUser} onLogout={handleLogout} onChangePassword={handleChangePassword} />
+              <ProfileDropdown
+                user={currentUser}
+                onLogout={handleLogout}
+                onChangePassword={handleChangePassword}
+              />
             </div>
           </div>
         </header>
 
+        {/* Main */}
         <main className="flex-1 overflow-hidden p-2 sm:p-3 lg:p-4">
           <div className="max-w-6xl mx-auto h-full flex flex-col">
-            <h2 className="text-2xl font-bold text-[#1e3a5f] mb-2">Internal Messaging</h2>
+            <h2 className="text-2xl font-bold text-[#1e3a5f] mb-2">Messaging __ My teams</h2>
+
+            {/* Error banner */}
+            {error && (
+              <div className="mb-2 px-4 py-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex items-center justify-between">
+                <span>{error}</span>
+                <button onClick={() => setError('')} className="ml-4 font-bold">✕</button>
+              </div>
+            )}
 
             <div className="flex flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
-              {/* Left panel: conversation list */}
+              {/* Conversation list */}
               <div className="w-64 shrink-0 border-r border-gray-200 flex flex-col">
                 <div className="p-3 border-b border-gray-100">
                   <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
                     <Search size={14} className="text-gray-400 shrink-0" />
                     <input
-                      type="text"
-                      placeholder="Search conversation"
+                      placeholder="search for a team..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="bg-transparent flex-1 text-xs text-gray-700 placeholder-gray-400 focus:outline-none"
                     />
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto">
-                  {filteredConvs.map(conv => (
-                    <div
-                      key={conv.id}
-                      onClick={() => handleSelectConv(conv.id)}
-                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${
-                        activeId === conv.id ? 'border-l-2 border-[#2D8FBF]' : ''
-                      } ${conv.unread > 0 ? 'bg-blue-50' : 'bg-white'}`}
-                    >
-                      <Avatar name={conv.name} size={38} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-gray-900 truncate">{conv.name}</span>
-                          <span className="text-xs text-gray-400 shrink-0 ml-1">{conv.time}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{conv.lastMessage}</p>
-                      </div>
-                      {conv.unread > 0 && (
-                        <span className="shrink-0 w-5 h-5 rounded-full bg-[#2D8FBF] text-white text-xs flex items-center justify-center font-medium">
-                          {conv.unread}
-                        </span>
-                      )}
+
+                <div className="flex-1 overflow-y-auto no-scrollbar">
+                  {loadingConvs ? (
+                    <div className="flex justify-center py-10">
+                      <Loader2 size={22} className="animate-spin text-[#2D8FBF]" />
                     </div>
-                  ))}
+                  ) : filteredConvs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                      <Users size={32} className="text-gray-200 mb-2" />
+                      <p className="text-xs text-gray-400">
+                        No team assigned.<br />
+                        Groups appear once a project has been proposed and accepted.
+                      </p>
+                    </div>
+                  ) : (
+                    filteredConvs.map((conv) => (
+                      <div
+                        key={conv.id}
+                        onClick={() => handleSelectConv(conv.id)}
+                        className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-gray-50 hover:bg-gray-50
+                          ${activeId === conv.id ? 'border-l-2 border-[#2D8FBF] bg-blue-50/40' : ''}
+                          ${conv.unread > 0 ? 'bg-blue-50' : ''}`}
+                      >
+                        <GroupIcon size={15} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-sm font-semibold text-gray-900 truncate">{conv.name}</span>
+                            <span className="text-xs text-gray-400 shrink-0 ml-1">{formatTime(conv.time)}</span>
+                          </div>
+                          {/* Show team members count */}
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">
+                            <Users size={9} /> {conv.members?.length || 0} membres
+                          </span>
+                          <p className="text-xs text-gray-400 truncate mt-1">
+                            {conv.lastMessage || 'No message'}
+                          </p>
+                        </div>
+                        {conv.unread > 0 && (
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-[#2D8FBF] text-white text-xs flex items-center justify-center font-medium mt-1">
+                            {conv.unread}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
-              {/* Right panel: active chat window */}
+              {/* Chat panel */}
               <div className="flex-1 flex flex-col overflow-hidden">
-                {activeConv ? (
+                {!activeConv ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
+                    {loadingConvs
+                      ? <Loader2 size={28} className="animate-spin text-[#2D8FBF]" />
+                      : (
+                        <>
+                          <GraduationCap size={48} className="mb-3" />
+                          <p className="text-sm text-gray-400">Sélectionnez une équipe</p>
+                        </>
+                      )
+                    }
+                  </div>
+                ) : (
                   <>
-                    <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-3">
-                      <Avatar name={activeConv.name} size={36} online={activeConv.online} />
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{activeConv.name}</p>
-                        <p className="text-xs" style={{ color: activeConv.online ? '#4CAF50' : '#9E9E9E' }}>
-                          {activeConv.online ? 'Active now' : 'Offline'}
-                        </p>
+                    {/* Conv header */}
+                    <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-3">
+                        <GroupIcon size={15} />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{activeConv.name}</p>
+                          <p className="text-xs text-gray-400">{activeConv.description}</p>
+                        </div>
                       </div>
+                      <MembersList members={activeConv.members || []} />
                     </div>
 
+                    {/* Messages */}
                     <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-gray-100 no-scrollbar">
-                      {activeConv.messages.map(msg => (
-                        <div
-                          key={msg.id}
-                          className={`flex items-end gap-2 ${msg.from === 'me' ? 'flex-row-reverse' : 'flex-row'}`}
-                        >
-                          {msg.from !== 'me' && <Avatar name={activeConv.name} size={36} />}
-                          <div className={`flex flex-col ${msg.from === 'me' ? 'items-end' : 'items-start'}`}>
-                            <div
-                              className="px-4 py-2.5 rounded-2xl max-w-xs text-sm leading-relaxed"
-                              style={
-                                msg.from === 'me'
-                                  ? { background: 'linear-gradient(135deg, #18335E, #2D8FBF)', color: '#fff', borderBottomRightRadius: 4 }
-                                  : { backgroundColor: '#FFFFFF', color: '#1F2937', borderBottomLeftRadius: 4, border: '1px solid #E5E7EB' }
-                              }
-                            >
-                              {msg.attachment ? (
-                                <div className="flex flex-col gap-1">
-                                  {msg.attachment.type === 'image' ? (
-                                    <img
-                                      src={msg.attachment.url}
-                                      alt={msg.attachment.name}
-                                      className="max-w-full rounded-md max-h-48 object-contain cursor-pointer"
-                                      onClick={() => window.open(msg.attachment.url, '_blank')}
-                                    />
-                                  ) : (
-                                    <a
-                                      href={msg.attachment.url}
-                                      download={msg.attachment.name}
-                                      className="flex items-center gap-2 text-blue-600 hover:underline"
-                                    >
-                                      <span className="text-sm">{msg.attachment.name}</span>
-                                      {msg.attachment.size && (
-                                        <span className="text-xs text-gray-400">({msg.attachment.size})</span>
-                                      )}
-                                    </a>
-                                  )}
-                                  {msg.text && <p className="mt-1">{msg.text}</p>}
-                                </div>
-                              ) : (
-                                msg.text
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 mt-1">
-                              <span className="text-xs text-gray-400">{msg.time}</span>
-                              {msg.from === 'me' && msg.read && (
-                                <CheckCheck size={14} className="text-blue-500" />
-                              )}
-                            </div>
-                          </div>
+                      {loadingMsgs ? (
+                        <div className="flex justify-center h-full items-center">
+                          <Loader2 size={24} className="animate-spin text-[#2D8FBF]" />
                         </div>
-                      ))}
+                      ) : messages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-300">
+                          <GraduationCap size={40} className="mb-2" />
+                          <p className="text-xs text-gray-400">Start the conversation with your team !</p>
+                        </div>
+                      ) : (
+                        messages.map((msg) => {
+                          const isMe = msg.sender_id === currentUser?.id;
+                          return (
+                            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                              {!isMe && <Avatar name={msg.sender_name} size={30} />}
+                              <div className={`flex flex-col max-w-xs ${isMe ? 'items-end' : 'items-start'}`}>
+                                {!isMe && (
+                                  <span className="text-[10px] text-gray-500 font-medium mb-1 ml-1">
+                                    {msg.sender_name}
+                                  </span>
+                                )}
+                                <div
+                                  className="px-4 py-2.5 rounded-2xl overflow-hidden"
+                                  style={isMe
+                                    ? { background: 'linear-gradient(135deg, #18335E, #2D8FBF)', color: '#fff', borderBottomRightRadius: 4 }
+                                    : { backgroundColor: '#fff', color: '#1F2937', borderBottomLeftRadius: 4, border: '1px solid #E5E7EB' }
+                                  }
+                                >
+                                  <MessageContent msg={msg} isMe={isMe} />
+                                </div>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <span className="text-xs text-gray-400">{formatTime(msg.created_at)}</span>
+                                  {isMe && msg.is_read === 1 && (
+                                    <CheckCheck size={13} className="text-blue-500" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="px-4 py-3 border-t border-gray-200 bg-white">
+                    {/* Input bar */}
+                    <div className="px-4 py-3 border-t border-gray-200 bg-white shrink-0">
                       <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
                         <button
-                          onClick={handleAttachmentClick}
-                          className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-gray-400 hover:text-gray-600 shrink-0"
+                          title="Envoyer un fichier"
                         >
                           <Paperclip size={18} />
                         </button>
@@ -375,30 +544,31 @@ const ChatPage = () => {
                           onChange={handleFileChange}
                           className="hidden"
                           multiple
+                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
                         />
                         <input
                           type="text"
-                          placeholder="Type a message..."
+                          placeholder={`Write to "${activeConv.name}"...`}
                           value={input}
                           onChange={(e) => setInput(e.target.value)}
                           onKeyDown={handleKeyDown}
+                          disabled={sending}
                           className="flex-1 text-sm text-gray-700 placeholder-gray-400 focus:outline-none bg-transparent"
                         />
                         <button
                           onClick={handleSend}
-                          disabled={!input.trim()}
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-opacity disabled:opacity-40"
+                          disabled={!input.trim() || sending}
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40"
                           style={{ background: 'linear-gradient(135deg, #18335E, #2D8FBF)' }}
                         >
-                          <Send size={15} />
+                          {sending
+                            ? <Loader2 size={15} className="animate-spin" />
+                            : <Send size={15} />
+                          }
                         </button>
                       </div>
                     </div>
                   </>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-                    Select a conversation to start chatting
-                  </div>
                 )}
               </div>
             </div>
