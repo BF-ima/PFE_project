@@ -25,7 +25,7 @@ exports.createProject = async (req, res) => {
     if (supervisor.role !== "enseignant" && supervisor.role !== "entreprise") {
     throw new Error("Accès refusé. Seuls les superviseurs peuvent créer des projets");
     }
-    const { title, max_students, description } = req.body;
+    const { title, max_students, description, speciality_id } = req.body;
 
     if (!title || !max_students) {
       return res.status(400).json({ message: "Titre et nombre max d'étudiants sont requis" });
@@ -36,17 +36,18 @@ exports.createProject = async (req, res) => {
     const external_supervisor_id = supervisor.role === "entreprise" ? supervisor.id : null;
 
     const [result] = await db.execute(
-      `INSERT INTO project 
-        (title, description, max_students, status, teacher_id, external_supervisor_id, created_at)
-       VALUES (?, ?, ?, 'PENDING', ?, ?, NOW())`,
-      [
-        title,
-        description    || null,
-        parseInt(max_students),
-        teacher_id,
-        external_supervisor_id,
-      ]
-    );
+  `INSERT INTO project 
+    (title, description, max_students, status, teacher_id, external_supervisor_id, speciality_id, created_at)
+   VALUES (?, ?, ?, 'PENDING', ?, ?, ?, NOW())`,
+  [
+    title,
+    description || null,
+    parseInt(max_students),
+    teacher_id,
+    external_supervisor_id,
+    speciality_id || null,   // ← add this
+  ]
+);
 
     res.status(201).json({
       message:   "Projet créé avec succès",
@@ -75,11 +76,13 @@ exports.getMyProjects = async (req, res) => {
     let query;
     if (supervisor.role === "enseignant") {
       query = `
-        SELECT id, title, status, created_at, max_students, description
-        FROM project
-        WHERE teacher_id = ?
-        ORDER BY created_at DESC
-      `;
+  SELECT p.id, p.title, p.status, p.created_at, p.max_students, p.description,
+         p.speciality_id, sp.name AS speciality_name
+  FROM project p
+  LEFT JOIN speciality sp ON p.speciality_id = sp.id
+  WHERE p.teacher_id = ?
+  ORDER BY p.created_at DESC
+`;
     } else {
       query = `
         SELECT id, title, status, created_at, max_students, description
@@ -112,13 +115,16 @@ exports.getProjectById = async (req, res) => {
       `SELECT p.*,
               CONCAT(t.first_name, ' ', t.last_name)  AS teacher_name,
               t.email                                   AS teacher_email,
-              t.phone                                   AS teacher_phone,
+              t.phone                                   AS teacher_phone,                  
               CONCAT(e.first_name, ' ', e.last_name)  AS external_supervisor_name,
               e.email                                   AS external_supervisor_email,
-              e.phone                                   AS external_supervisor_phone
+              e.phone                                   AS external_supervisor_phone,
+              s.name                                    AS speciality_name,
+              s.code                                    AS speciality_code
        FROM project p
        LEFT JOIN users t ON p.teacher_id             = t.id
        LEFT JOIN users e ON p.external_supervisor_id = e.id
+       LEFT JOIN speciality s ON p.speciality_id = s.id
        WHERE p.id = ?`,
       [id]
     );
@@ -179,7 +185,7 @@ exports.updateProject = async (req, res) => {
   try {
     const supervisor = await getSupervisorFromToken(token);
     const { id }     = req.params;
-    const { title, max_students, description } = req.body;
+    const { title, max_students, description, speciality_id } = req.body;
 
     if (!title || !max_students) {
       return res.status(400).json({ message: "Titre et nombre max d'étudiants sont requis" });
@@ -200,9 +206,9 @@ exports.updateProject = async (req, res) => {
     }
 
     await db.execute(
-      `UPDATE project SET title = ?, description = ?, max_students = ? WHERE id = ?`,
-      [title, description || null, parseInt(max_students), id]
-    );
+  `UPDATE project SET title = ?, description = ?, max_students = ?, speciality_id = ? WHERE id = ?`,
+  [title, description || null, parseInt(max_students), speciality_id || null, id]
+);
 
     res.json({ message: "Projet modifié avec succès" });
 
@@ -238,11 +244,13 @@ exports.getAllProjects = async (req, res) => {
 
     let query = `
       SELECT p.*,
-             CONCAT(t.first_name, ' ', t.last_name) AS teacher_name,
-             CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name
-      FROM project p
-      LEFT JOIN users t ON p.teacher_id             = t.id
-      LEFT JOIN users e ON p.external_supervisor_id = e.id
+       CONCAT(t.first_name, ' ', t.last_name) AS teacher_name,
+       CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name,
+       sp.name AS speciality_name 
+FROM project p
+LEFT JOIN users t       ON p.teacher_id             = t.id
+LEFT JOIN users e       ON p.external_supervisor_id = e.id
+LEFT JOIN speciality sp ON p.speciality_id          = sp.id 
     `;
     const params = [];
 
@@ -333,6 +341,34 @@ exports.getProjectMessages = async (req, res) => {
     res.json({ messages });
   } catch (err) {
     console.error("getProjectMessages error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+exports.getValidatedProjects = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+  
+const [projects] = await db.execute(
+  `SELECT p.id, p.title, p.description, p.created_at, p.max_students,
+          p.speciality_id,
+          CONCAT(t.first_name, ' ', t.last_name) AS supervisor_name,
+          CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name
+   FROM project p
+   LEFT JOIN users t ON p.teacher_id             = t.id
+   LEFT JOIN users e ON p.external_supervisor_id = e.id
+   WHERE p.status IN ('VALIDATED', 'ASSIGNED')
+   ORDER BY p.created_at DESC`,
+  []
+);
+
+    res.json({ projects });
+
+  } catch (err) {
+    console.error("getValidatedProjects error:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

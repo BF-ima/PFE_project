@@ -8,6 +8,7 @@ const getUserFromToken = async (token) => {
   return users[0];
 };
 
+
 // GET /api/notifications
 exports.getNotifications = async (req, res) => {
   const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
@@ -21,7 +22,8 @@ exports.getNotifications = async (req, res) => {
        ORDER BY created_at DESC`,
       [user.id]
     );
-    res.json({ notifications: rows });
+    const unread_count = rows.filter(n => !n.is_read).length;
+    res.json({ notifications: rows, unread_count });
   } catch (err) {
     console.error("getNotifications error:", err);
     res.status(500).json({ message: "Erreur serveur" });
@@ -76,5 +78,91 @@ exports.markAllRead = async (req, res) => {
   } catch (err) {
     console.error("markAllRead error:", err);
     res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+
+// POST /api/notifications/broadcast
+exports.broadcastNotification = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const { type, title, message, role } = req.body;
+
+    console.log("broadcast received:", { type, title, message, role });
+
+    if (!type || !title || !message || !role) {
+      return res.status(400).json({ message: "Missing fields" });
+    }
+
+    // Get team_ids that have already submitted
+    const [submittedTeams] = await db.execute(
+      `SELECT DISTINCT team_id 
+       FROM wish 
+       WHERE status = 'SUBMITTED' AND team_id IS NOT NULL`
+    );
+    const submittedTeamIds = submittedTeams.map(r => r.team_id);
+
+    console.log("Submitted team_ids:", submittedTeamIds);
+
+    let users = [];
+
+    if (submittedTeamIds.length === 0) {
+      // No team submitted yet → notify all active students
+      const [rows] = await db.execute(
+        "SELECT id FROM users WHERE role = ? AND is_active = 1",
+        [role]
+      );
+      users = rows;
+    } else {
+      const placeholders = submittedTeamIds.map(() => "?").join(",");
+
+      const [rows] = await db.execute(
+        `-- Students in a team that has NOT submitted
+         SELECT DISTINCT u.id
+         FROM users u
+         INNER JOIN team_member tm ON tm.student_id = u.id
+         WHERE u.role = ?
+           AND u.is_active = 1
+           AND tm.status = 'ACCEPTED'
+           AND tm.team_id NOT IN (${placeholders})
+
+         UNION
+
+         -- Students who have no team at all
+         SELECT u.id
+         FROM users u
+         WHERE u.role = ?
+           AND u.is_active = 1
+           AND u.id NOT IN (
+             SELECT student_id FROM team_member WHERE status = 'ACCEPTED'
+           )`,
+        [role, ...submittedTeamIds, role]
+      );
+      users = rows;
+    }
+
+    console.log(`Sending to ${users.length} users who haven't submitted`);
+
+    if (users.length === 0) {
+      return res.status(200).json({ message: "All students have already submitted their wishlist" });
+    }
+
+    for (const u of users) {
+      await db.execute(
+        `INSERT INTO notification (user_id, type, title, message, is_read, created_at)
+         VALUES (?, ?, ?, ?, 0, NOW())`,
+        [u.id, type, title, message]
+      );
+      console.log(`Inserted notification for user ${u.id}`);
+    }
+
+    res.json({ message: `Notification sent to ${users.length} users who haven't submitted` });
+
+  } catch (err) {
+    console.error("broadcastNotification error:", err);
+    res.status(500).json({ message: err.message || "Erreur serveur" });
   }
 };

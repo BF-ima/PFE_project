@@ -13,22 +13,24 @@ const {
   removeMember,
   getTeamMembers,
   inviteMember,
+  getSupervisorTeams,
 } = require("../controllers/teamController");
 
 // ── Team ───────────────────────────────────────────────────────────────────
-router.get("/my",          getMyTeam);         // GET    /teams/my
-router.get("/",            getAllTeams);        // GET    /teams?project_id=&status=
-router.get("/:id",         getTeamById);       // GET    /teams/:id
-router.post("/",           createTeam);        // POST   /teams
-router.put("/:id/status",  updateTeamStatus);  // PUT    /teams/:id/status
-router.put("/:id/project", assignProject);     // PUT    /teams/:id/project
-router.delete("/:id",      deleteTeam);        // DELETE /teams/:id
+router.get("/my",                    getMyTeam);           // GET    /teams/my
+router.get("/my-supervisor-teams",   getSupervisorTeams);  // GET    /teams/my-supervisor-teams  ← moved up
+router.get("/",                      getAllTeams);          // GET    /teams
+router.get("/:id",                   getTeamById);         // GET    /teams/:id  ← must come after named routes
+router.post("/",                     createTeam);          // POST   /teams
+router.put("/:id/status",            updateTeamStatus);    // PUT    /teams/:id/status
+router.put("/:id/project",           assignProject);       // PUT    /teams/:id/project
+router.delete("/:id",                deleteTeam);          // DELETE /teams/:id
 
 // ── Members ────────────────────────────────────────────────────────────────
-router.get("/:id/members",                   getTeamMembers);  // GET    /teams/:id/members?status=
-router.post("/:id/join",                     requestJoinTeam); // POST   /teams/:id/join
-router.post("/:id/invite",                   inviteMember);  // POST   /teams/:id/invite
-router.put("/:id/members/:memberId/accept",  acceptMember);    // PUT    /teams/:id/members/:memberId/accept
-router.delete("/:id/members/:memberId",      removeMember);    // DELETE /teams/:id/members/:memberId
+router.get("/:id/members",                   getTeamMembers);
+router.post("/:id/join",                     requestJoinTeam);
+router.post("/:id/invite",                   inviteMember);
+router.put("/:id/members/:memberId/accept",  acceptMember);
+router.delete("/:id/members/:memberId",      removeMember);
 
 module.exports = router;

@@ -82,8 +82,8 @@ const simulateDistribution = async (mode) => {
   );
   const projectMap = {};
   for (const p of allProjects) {
-    projectMap[p.id] = { max_students: p.max_students, taken: false, taken_by: null };
-  }
+  projectMap[p.id] = { max_students: p.max_students, assigned_teams: 0 };
+}
 
   const getTeamSize = async (teamId) => {
     const [rows] = await db.execute(
@@ -98,27 +98,25 @@ const simulateDistribution = async (mode) => {
 
   for (const team of rankedTeams) {
     const wishes   = await getTeamWishes(team.team_id);
-    const teamSize = await getTeamSize(team.team_id);
     let assigned   = false;
 
     for (const wish of wishes) {
-      const proj = projectMap[wish.project_id];
-      if (!proj || proj.taken)           continue;
-      if (teamSize > proj.max_students)  continue;
+  const proj = projectMap[wish.project_id];
+  if (!proj) continue;
+  if (proj.assigned_teams >= proj.max_students) continue; // max teams reached
 
-      proj.taken    = true;
-      proj.taken_by = team.team_id;
+  proj.assigned_teams += 1;
 
-      assignments.push({
-        team_id:            team.team_id,
-        project_id:         wish.project_id,
-        priority_obtained:  wish.priority,
-        team_average:       team.average,
-        first_submitted_at: team.first_submitted_at,
-      });
-      assigned = true;
-      break;
-    }
+  assignments.push({
+    team_id:            team.team_id,
+    project_id:         wish.project_id,
+    priority_obtained:  wish.priority,
+    team_average:       team.average,
+    first_submitted_at: team.first_submitted_at,
+  });
+  assigned = true;
+  break;
+}
 
     if (!assigned) {
       unassigned.push({
@@ -383,7 +381,7 @@ exports.manualAssign = async (req, res) => {
       return res.status(400).json({ message: "team_id et project_id sont requis" });
     }
 
-    // Check project is available (VALIDATED or not yet taken)
+    // Check project exists
     const [[proj]] = await db.execute(
       "SELECT id, max_students, status, teacher_id FROM project WHERE id = ?",
       [project_id]
@@ -393,35 +391,34 @@ exports.manualAssign = async (req, res) => {
       return res.status(400).json({ message: "Ce projet n'est pas disponible" });
     }
 
-    // Check not already assigned to another team
-    const [[existing]] = await db.execute(
-      "SELECT id FROM assignment WHERE project_id = ? AND team_id != ?",
-      [project_id, team_id]
-    );
-    if (existing) {
-      return res.status(409).json({ message: "Ce projet est déjà attribué à une autre équipe" });
-    }
-
-    // Check team size fits
-    const [[size]] = await db.execute(
-      "SELECT COUNT(*) AS cnt FROM team_member WHERE team_id = ?",
-      [team_id]
-    );
-    if (size.cnt > proj.max_students) {
-      return res.status(400).json({ message: `L'équipe (${size.cnt} membres) dépasse la capacité du projet (${proj.max_students})` });
-    }
-
-    // Remove existing assignment for this team if any
+    // Check if this team already has an assignment (needed before capacity check)
     const [[oldAssignment]] = await db.execute(
       "SELECT project_id FROM assignment WHERE team_id = ?",
       [team_id]
     );
+
+    // Check project capacity, excluding this team's current slot if it's already on this project
+    const [[assignedCount]] = await db.execute(
+      "SELECT COUNT(*) AS cnt FROM assignment WHERE project_id = ?",
+      [project_id]
+    );
+    const effectiveCount = assignedCount.cnt - (oldAssignment?.project_id === project_id ? 1 : 0);
+    if (effectiveCount >= proj.max_students) {
+      return res.status(409).json({
+        message: `Ce projet a atteint sa capacité maximale (${proj.max_students} équipes)`,
+      });
+    }
+
+    // Remove existing assignment for this team if any
     if (oldAssignment) {
-      await db.execute("UPDATE project SET status = 'VALIDATED' WHERE id = ?", [oldAssignment.project_id]);
+      await db.execute(
+        "UPDATE project SET status = 'VALIDATED' WHERE id = ?",
+        [oldAssignment.project_id]
+      );
       await db.execute("DELETE FROM assignment WHERE team_id = ?", [team_id]);
     }
 
-    // Insert
+    // Insert new assignment
     await db.execute(
       "INSERT INTO assignment (team_id, project_id, assigned_at, mode) VALUES (?, ?, NOW(), 'manual')",
       [team_id, project_id]
@@ -435,6 +432,164 @@ exports.manualAssign = async (req, res) => {
 
   } catch (err) {
     console.error("manualAssign error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+exports.getTeamsWithAverages = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const user = await getUserFromToken(token);
+    if (!["admin", "super_admin", "enseignant"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    const [wishes] = await db.execute(
+      `SELECT w.id, w.priority, w.submitted_at, w.status,
+              t.id                                   AS team_id,
+              CONCAT(u.first_name, ' ', u.last_name) AS leader_name,
+              u.email                                AS leader_email,
+              p.title                                AS project_title,
+              p.id                                   AS project_id
+       FROM wish w
+       JOIN team    t ON t.id = w.team_id
+       JOIN users   u ON u.id = t.leader_id
+       JOIN project p ON p.id = w.project_id
+       ORDER BY t.id ASC, w.priority ASC`
+    );
+
+    const averageCache = {};
+    const enriched = await Promise.all(
+      wishes.map(async (w) => {
+        if (averageCache[w.team_id] === undefined) {
+          averageCache[w.team_id] = await getTeamAverage(w.team_id);
+        }
+        return { ...w, team_average: averageCache[w.team_id] };
+      })
+    );
+
+    res.json({ wishes: enriched });
+  } catch (err) {
+    console.error("getTeamsWithAverages error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+exports.getMyResult = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Find the team this student belongs to
+    const [[student]] = await db.execute(
+      "SELECT id FROM student WHERE id = ?", [decoded.id]
+    );
+    if (!student) return res.status(404).json({ message: "Étudiant non trouvé" });
+
+    const [[teamMember]] = await db.execute(
+      "SELECT team_id FROM team_member WHERE student_id = ?", [student.id]
+    );
+    if (!teamMember) return res.json({ assignment: null });
+
+    // Get assignment for this team
+    const [[assignment]] = await db.execute(`
+      SELECT 
+        a.assigned_at,
+        p.title        AS project_title,
+        p.description  AS project_description,
+        p.id           AS project_id,
+        (SELECT CONCAT(u.first_name, ' ', u.last_name) 
+         FROM teacher t JOIN users u ON u.id = t.id 
+         WHERE t.id = p.teacher_id LIMIT 1) AS supervisor,
+        (SELECT w.priority FROM wish w 
+         WHERE w.team_id = a.team_id 
+           AND w.project_id = a.project_id 
+           AND w.status = 'SUBMITTED' 
+         LIMIT 1) AS assigned_priority
+      FROM assignment a
+      JOIN project p ON p.id = a.project_id
+      WHERE a.team_id = ?
+    `, [teamMember.team_id]);
+
+    res.json({ assignment: assignment || null });
+
+  } catch (err) {
+    console.error("getMyResult error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+exports.getStatistics = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const user = await getUserFromToken(token);
+    if (!["admin", "super_admin"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    const [[{ total_teams }]] = await db.execute(
+      `SELECT COUNT(DISTINCT team_id) AS total_teams FROM wish WHERE status = 'SUBMITTED'`
+    );
+    const [[{ assigned_teams }]] = await db.execute(
+      `SELECT COUNT(*) AS assigned_teams FROM assignment`
+    );
+    const unassigned_teams = total_teams - assigned_teams;
+    const allocation_rate  = total_teams > 0 ? Math.round((assigned_teams / total_teams) * 100) : 0;
+
+    const [[{ first_choice }]] = await db.execute(
+      `SELECT COUNT(*) AS first_choice FROM assignment a
+       JOIN wish w ON w.team_id = a.team_id AND w.project_id = a.project_id
+       WHERE w.priority = 1 AND w.status = 'SUBMITTED'`
+    );
+    const [[{ second_choice }]] = await db.execute(
+      `SELECT COUNT(*) AS second_choice FROM assignment a
+       JOIN wish w ON w.team_id = a.team_id AND w.project_id = a.project_id
+       WHERE w.priority = 2 AND w.status = 'SUBMITTED'`
+    );
+    const [[{ third_choice_plus }]] = await db.execute(
+      `SELECT COUNT(*) AS third_choice_plus FROM assignment a
+       JOIN wish w ON w.team_id = a.team_id AND w.project_id = a.project_id
+       WHERE w.priority >= 3 AND w.status = 'SUBMITTED'`
+    );
+
+    const satisfaction_rate = total_teams > 0
+      ? Math.round((first_choice / total_teams) * 100) : 0;
+
+    const [project_distribution] = await db.execute(
+      `SELECT 
+         p.id           AS project_id,
+         p.title        AS project_title,
+         p.max_students,
+         COUNT(a.team_id) AS assigned_teams
+       FROM project p
+       LEFT JOIN assignment a ON a.project_id = p.id
+       WHERE p.status IN ('VALIDATED', 'ASSIGNED')
+       GROUP BY p.id, p.title, p.max_students
+       ORDER BY assigned_teams DESC`
+    );
+
+    res.json({
+      total_teams,
+      assigned_teams,
+      unassigned_teams,
+      allocation_rate,
+      satisfaction_rate,
+      first_choice,
+      second_choice,
+      third_choice_plus,
+      project_distribution,
+    });
+
+  } catch (err) {
+    console.error("getStatistics error:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

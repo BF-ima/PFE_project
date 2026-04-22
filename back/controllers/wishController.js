@@ -25,12 +25,22 @@ const getStudentGroup = async (userId) => {
   return rows.length > 0 ? rows[0] : null;
 };
 
-// Helper — get all validated project IDs from DB
-const getValidatedProjectIds = async () => {
+// Helper — get all validated project IDs from DB by speciality
+const getValidatedProjectIds = async (specialityId) => {
   const [rows] = await db.execute(
-    "SELECT id FROM project WHERE status = 'VALIDATED'"
+    "SELECT id FROM project WHERE status = 'VALIDATED' AND speciality_id = ?",
+    [specialityId]
   );
   return rows.map((r) => r.id);
+};
+
+// Helper — get student's speciality_id
+const getStudentSpeciality = async (userId) => {
+  const [rows] = await db.execute(
+    "SELECT speciality_id FROM student WHERE id = ?",
+    [userId]
+  );
+  return rows.length > 0 ? rows[0].speciality_id : null;
 };
 
 // Helper — validate that the submitted order contains exactly all validated projects
@@ -60,19 +70,25 @@ exports.getAvailableProjects = async (req, res) => {
       return res.status(403).json({ message: "Accès refusé" });
     }
 
+    const specialityId = await getStudentSpeciality(user.id);
+    if (!specialityId) return res.json({ projects: [] });
+
     const [projects] = await db.execute(
       `SELECT p.id,
               p.title,
               p.description,
               p.max_students,
               p.created_at,
+              p.speciality_id,
               CONCAT(t.first_name, ' ', t.last_name) AS supervisor,
               CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor
        FROM project p
        LEFT JOIN users t ON p.teacher_id             = t.id
        LEFT JOIN users e ON p.external_supervisor_id = e.id
        WHERE p.status = 'VALIDATED'
-       ORDER BY p.created_at DESC`
+         AND p.speciality_id = ?
+       ORDER BY p.created_at DESC`,
+      [specialityId]
     );
 
     res.json({ projects });
@@ -130,9 +146,6 @@ exports.getMyWishes = async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // SAVE DRAFT
-// Leader submits ALL validated projects in their preferred order.
-// Priority is assigned automatically: 1 = most preferred, N = least preferred.
-// Body: { projectIds: [3, 1, 5, 2, 4] }  <- ordered array of project IDs
 // -----------------------------------------------------------------------------
 exports.saveDraft = async (req, res) => {
   const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
@@ -165,7 +178,13 @@ exports.saveDraft = async (req, res) => {
       return res.status(400).json({ message: "La liste ordonnée des projets est requise" });
     }
 
-    const validatedIds = await getValidatedProjectIds();
+    // ✅ Fix: fetch specialityId and pass it to the helper
+    const specialityId = await getStudentSpeciality(user.id);
+    if (!specialityId) {
+      return res.status(400).json({ message: "Spécialité de l'étudiant introuvable" });
+    }
+
+    const validatedIds = await getValidatedProjectIds(specialityId);
     if (!validateProjectOrder(projectIds, validatedIds)) {
       return res.status(400).json({
         message: "La liste doit contenir exactement tous les projets validés, sans doublons ni omissions",
@@ -196,7 +215,6 @@ exports.saveDraft = async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // SUBMIT PERMANENTLY
-// Body: { projectIds: [3, 1, 5, 2, 4] }
 // -----------------------------------------------------------------------------
 exports.submitWishes = async (req, res) => {
   const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
@@ -230,7 +248,13 @@ exports.submitWishes = async (req, res) => {
       return res.status(400).json({ message: "La liste ordonnée des projets est requise" });
     }
 
-    const validatedIds = await getValidatedProjectIds();
+    // ✅ Fix: fetch specialityId and pass it to the helper
+    const specialityId = await getStudentSpeciality(user.id);
+    if (!specialityId) {
+      return res.status(400).json({ message: "Spécialité de l'étudiant introuvable" });
+    }
+
+    const validatedIds = await getValidatedProjectIds(specialityId);
     if (!validateProjectOrder(projectIds, validatedIds)) {
       return res.status(400).json({
         message: "La liste doit contenir exactement tous les projets validés, sans doublons ni omissions",

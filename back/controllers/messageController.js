@@ -57,53 +57,72 @@ exports.getConversations = async (req, res) => {
     }
 
     const conversations = await Promise.all(
-      rows.map(async (gc) => {
-        const [members] = await db.execute(
-         `SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.email
-          FROM users u
-          JOIN team_member tm ON tm.student_id = u.id
-          WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'`,
-          [gc.team_id]
-          );
-
-        let supervisor = null;
-        if (gc.supervisor_id) {
-          const [supRows] = await db.execute(
-            "SELECT id, CONCAT(first_name, ' ', last_name) AS name, email FROM users WHERE id = ?",
-            [gc.supervisor_id]
-          );
-          supervisor = supRows[0] || null;
-        }
-
-        const [lastMsg] = await db.execute(
-          `SELECT content, created_at FROM group_message
-           WHERE group_conversation_id = ?
-           ORDER BY created_at DESC LIMIT 1`,
-          [gc.conv_id]
-        );
-
-        const [unreadRow] = await db.execute(
-          `SELECT COUNT(*) AS cnt FROM group_message
-           WHERE group_conversation_id = ? AND sender_id != ? AND is_read = 0`,
-          [gc.conv_id, user.id]
-        );
-
-        return {
-          id: gc.conv_id,
-          team_id: gc.team_id,
-          group_type: gc.group_type,
-          name: gc.group_type === "team" ? "Mon Groupe" : "Groupe + Encadrant",
-          description: gc.group_type === "team"
-            ? "Conversation avec les membres de votre équipe"
-            : "Conversation avec votre équipe et votre encadrant",
-          members: supervisor ? [...members, supervisor] : members,
-          supervisor,
-          lastMessage: lastMsg[0]?.content || "",
-          time: lastMsg[0]?.created_at || gc.created_at,
-          unread: unreadRow[0]?.cnt || 0,
-        };
-      })
+  rows.map(async (gc) => {
+    const [members] = await db.execute(
+      `SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.email
+       FROM users u
+       JOIN team_member tm ON tm.student_id = u.id
+       WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'`,
+      [gc.team_id]
     );
+
+    let supervisor = null;
+    if (gc.supervisor_id) {
+      const [supRows] = await db.execute(
+        "SELECT id, CONCAT(first_name, ' ', last_name) AS name, email FROM users WHERE id = ?",
+        [gc.supervisor_id]
+      );
+      supervisor = supRows[0] || null;
+    }
+
+    const [lastMsg] = await db.execute(
+      `SELECT content, created_at FROM group_message
+       WHERE group_conversation_id = ?
+       ORDER BY created_at DESC LIMIT 1`,
+      [gc.conv_id]
+    );
+
+    const [unreadRow] = await db.execute(
+      `SELECT COUNT(*) AS cnt FROM group_message
+       WHERE group_conversation_id = ? AND sender_id != ? AND is_read = 0`,
+      [gc.conv_id, user.id]
+    );
+
+    // ── ADD THIS ──────────────────────────────────────────────────────────
+    const [leaderRows] = await db.execute(
+      `SELECT CONCAT(u.first_name, ' ', u.last_name) AS name
+       FROM users u
+       JOIN team_member tm ON tm.student_id = u.id
+       WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'
+       ORDER BY tm.joined_at ASC
+       LIMIT 1`,
+      [gc.team_id]
+    );
+    const leaderName = leaderRows[0]?.name || 'Unknown team';
+    // ─────────────────────────────────────────────────────────────────────
+
+    return {
+      id:          gc.conv_id,
+      team_id:     gc.team_id,
+      group_type:  gc.group_type,
+      name: gc.group_type === "team"
+        ? "My team"
+        : user.role === "etudiant"
+          ? "Team + Supervisor"
+          : leaderName,
+      description: gc.group_type === "team"
+        ? "Conversation with my team members"
+        : user.role === "etudiant"
+          ? "Conversation with my team members and our supervisor"
+          : `${leaderName}'s team`,
+      members:     supervisor ? [...members, supervisor] : members,
+      supervisor,
+      lastMessage: lastMsg[0]?.content || "",
+      time:        lastMsg[0]?.created_at || gc.created_at,
+      unread:      unreadRow[0]?.cnt || 0,
+    };
+  })
+);
 
     res.json({ conversations });
   } catch (err) {

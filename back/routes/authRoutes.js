@@ -4,7 +4,7 @@ const {
     createDefaultSuperAdmin,
     register, 
     importUsersFromExcel,
-    deleteUser,
+    archiveUser,
     updateUser,
     login, 
     logout,
@@ -61,7 +61,7 @@ router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 router.put("/change-password", changePassword);
-router.delete('/delete/:id', deleteUser);
+router.delete('/delete/:id', archiveUser);
 router.put('/update/:id', updateUser);
 router.get("/me", getMe);
 

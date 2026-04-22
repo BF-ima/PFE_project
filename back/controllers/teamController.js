@@ -168,25 +168,39 @@ exports.getAllTeams = async (req, res) => {
 
     let query = `
       SELECT t.*,
-             CONCAT(u.first_name, ' ', u.last_name)             AS leader_name,
-             u.email                                              AS leader_email,
-             p.title                                              AS project_title,
-             p.max_students                                       AS project_max_students,
-             COUNT(CASE WHEN tm.status = 'ACCEPTED' THEN 1 END)  AS member_count
+             CONCAT(u.first_name, ' ', u.last_name)              AS leader_name,
+             u.email                                               AS leader_email,
+             COALESCE(p_a.title, p_t.title)                       AS project_title,
+             COALESCE(p_a.max_students, p_t.max_students)         AS project_max_students,
+             a.mode                                                AS assignment_mode,
+             a.assigned_at,
+             COUNT(CASE WHEN tm.status = 'ACCEPTED' THEN 1 END)   AS member_count
       FROM team t
-      LEFT JOIN users       u  ON t.leader_id  = u.id
-      LEFT JOIN project     p  ON t.project_id = p.id
-      LEFT JOIN team_member tm ON tm.team_id   = t.id
+      LEFT JOIN users       u   ON t.leader_id   = u.id
+      LEFT JOIN team_member tm  ON tm.team_id    = t.id
+      LEFT JOIN assignment  a   ON a.team_id     = t.id
+      LEFT JOIN project     p_a ON p_a.id        = a.project_id
+      LEFT JOIN project     p_t ON p_t.id        = t.project_id
     `;
 
     const conditions = [];
     const params     = [];
 
-    if (project_id) { conditions.push("t.project_id = ?"); params.push(project_id); }
-    if (status)     { conditions.push("t.status = ?");     params.push(status.toUpperCase()); }
+    if (project_id) {
+      conditions.push("(a.project_id = ? OR t.project_id = ?)");
+      params.push(project_id, project_id);
+    }
+    if (status) {
+      conditions.push("t.status = ?");
+      params.push(status.toUpperCase());
+    }
 
     if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
-    query += ` GROUP BY t.id ORDER BY t.created_at DESC`;
+    query += ` GROUP BY t.id, u.first_name, u.last_name, u.email,
+                        p_a.title, p_a.max_students,
+                        p_t.title, p_t.max_students,
+                        a.mode, a.assigned_at
+               ORDER BY t.created_at DESC`;
 
     const [teams] = await db.execute(query, params);
     res.json({ teams });
@@ -196,7 +210,6 @@ exports.getAllTeams = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-
 // -----------------------------------------------------------------------------
 // GET SINGLE TEAM (with members)
 // -----------------------------------------------------------------------------
@@ -211,15 +224,19 @@ exports.getTeamById = async (req, res) => {
 
     const [teams] = await db.execute(
       `SELECT t.*,
-              CONCAT(u.first_name, ' ', u.last_name) AS leader_name,
-              u.email                                  AS leader_email,
-              p.title                                  AS project_title,
-              p.description                            AS project_description,
-              p.max_students                           AS project_max_students,
-              p.status                                 AS project_status
+              CONCAT(u.first_name, ' ', u.last_name)       AS leader_name,
+              u.email                                        AS leader_email,
+              COALESCE(p_a.title,       p_t.title)          AS project_title,
+              COALESCE(p_a.description, p_t.description)    AS project_description,
+              COALESCE(p_a.max_students,p_t.max_students)   AS project_max_students,
+              COALESCE(p_a.status,      p_t.status)         AS project_status,
+              a.mode                                         AS assignment_mode,
+              a.assigned_at
        FROM team t
-       LEFT JOIN users   u ON t.leader_id  = u.id
-       LEFT JOIN project p ON t.project_id = p.id
+       LEFT JOIN users      u   ON t.leader_id  = u.id
+       LEFT JOIN assignment a   ON a.team_id    = t.id
+       LEFT JOIN project    p_a ON p_a.id       = a.project_id
+       LEFT JOIN project    p_t ON p_t.id       = t.project_id
        WHERE t.id = ?`,
       [id]
     );
@@ -691,6 +708,86 @@ exports.inviteMember = async (req, res) => {
 
   } catch (err) {
     console.error("inviteMember error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET TEAMS ASSIGNED TO SUPERVISOR  
+// -----------------------------------------------------------------------------
+exports.getSupervisorTeams = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const user = await getUserFromToken(token);
+
+    if (!["enseignant", "admin", "super_admin", "entreprise"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    const [teams] = await db.execute(
+      `SELECT
+         t.id                                                AS team_id,
+         t.status                                            AS team_status,
+         t.created_at,
+         p.title                                             AS project_title,
+         p.max_students,
+         p.status                                            AS project_status,
+         sp.name                                             AS speciality_name,
+         CONCAT(u.first_name, ' ', u.last_name)             AS leader_name,
+         u.email                                             AS leader_email,
+         a.assigned_at,
+         a.mode,
+         COUNT(CASE WHEN tm.status = 'ACCEPTED' THEN 1 END) AS member_count,
+         GROUP_CONCAT(
+           CASE WHEN tm.status = 'ACCEPTED'
+             THEN CONCAT(mu.first_name, ' ', mu.last_name)
+           END
+           ORDER BY tm.joined_at ASC
+           SEPARATOR ', '
+         )                                                   AS members_names,
+
+         -- FIX: count distinct deliverable titles submitted by this specific team
+         (
+           SELECT COUNT(DISTINCT d.title)
+           FROM deliverable d
+           WHERE d.team_id = t.id
+             AND d.title IN (
+               'Final Report',
+               'Source Code Repository',
+               'Defense Presentation'
+             )
+             -- only count the latest version of each title
+             AND d.version = (
+               SELECT MAX(d2.version)
+               FROM deliverable d2
+               WHERE d2.team_id = d.team_id
+                 AND d2.title   = d.title
+             )
+         )                                                   AS submitted_count
+
+       FROM assignment a
+       JOIN project      p   ON p.id       = a.project_id
+       JOIN team         t   ON t.id       = a.team_id
+       JOIN users        u   ON u.id       = t.leader_id
+       JOIN team_member  tm  ON tm.team_id = t.id
+       JOIN users        mu  ON mu.id      = tm.student_id
+       LEFT JOIN speciality sp ON sp.id    = p.speciality_id
+       WHERE (p.teacher_id = ? OR p.external_supervisor_id = ?)
+       GROUP BY
+         t.id, t.status, t.created_at,
+         p.title, p.max_students, p.status,
+         sp.name, u.first_name, u.last_name, u.email,
+         a.assigned_at, a.mode
+       ORDER BY a.assigned_at DESC`,
+      [user.id, user.id]
+    );
+
+    res.json({ teams });
+
+  } catch (err) {
+    console.error("getSupervisorTeams error:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

@@ -116,7 +116,7 @@ exports.register = async (req, res) => {
         }
           
         console.log("REGISTER BODY:", req.body);
-        const { first_name, last_name, email, password, role, permissions, specialization, moyenne, speciality_id, promo_id, company_name, contact_person, phone, department } = req.body;
+        const { first_name, last_name, email, password, role, permissions, specialization,rank, moyenne, speciality_id, promo_id, company_name, contact_person, phone, department } = req.body;
 
         const allowedRoles = ['admin', 'enseignant', 'etudiant', 'entreprise'];
         if (!allowedRoles.includes(role)) {
@@ -160,7 +160,7 @@ exports.register = async (req, res) => {
                     await connection.execute("INSERT INTO administrator (id, permissions) VALUES (?,?)", [userId , JSON.stringify(permissions)]);
                     break;
                 case 'enseignant':
-                    await connection.execute("INSERT INTO teacher (id, grade) VALUES (?, ?)", [userId, specialization]);
+                    await connection.execute("INSERT INTO teacher (id, grade , `rank`) VALUES (?, ? ,?)", [userId, specialization , rank]);
                     break;
                 case 'etudiant':
                     // Verify speciality_id exists before inserting
@@ -243,6 +243,7 @@ exports.importUsersFromExcel = async (req, res) => {
         phone:          n.phonenumber  || n.phone       || n.tel          || null,
         permission:     n.permission   || n.role        || n.permissiongiven || null,
         specialization: n.specialization || n.speciality || n.grade       || null,
+        rank:           n.rank         || n.rank        || n.rank         || null,
         company_name:   n.companyname  || n.company     || n.organization || null,
         contact_person: n.contactperson|| n.contact     || n.position     || null,
         department:     n.department   || n.dept        || null,
@@ -283,8 +284,8 @@ exports.importUsersFromExcel = async (req, res) => {
 
           case "enseignant":
             await connection.execute(
-              "INSERT INTO teacher (id, grade) VALUES (?, ?)",
-              [userId, row.specialization || null]
+              "INSERT INTO teacher (id, grade , `rank`) VALUES (?, ? ,?)",
+              [userId, row.specialization || null , row.rank]
             );
             break;
 
@@ -328,10 +329,10 @@ exports.importUsersFromExcel = async (req, res) => {
 
 
 //--------------------------------------------------------------------
-//delete user
+//archive user
 //-------------------------------------------------------------------
-// DELETE user by ID — only super admin can delete
-exports.deleteUser = async (req, res) => {
+// archive user by ID — only super admin can delete
+exports.archiveUser = async (req, res) => {
   const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
   if (!token) return res.status(401).json({ message: "Non authentifié" });
 
@@ -340,14 +341,13 @@ exports.deleteUser = async (req, res) => {
     const currentUserId = decoded.id;
 
     if (!(await isSuperAdmin(currentUserId))) {
-      return res.status(403).json({ message: "Accès refusé. Seul le super admin peut supprimer des utilisateurs" });
+      return res.status(403).json({ message: "Accès refusé." });
     }
 
     const { id } = req.params;
 
-    // Check user exists and was created by this super admin
     const [existing] = await db.execute(
-      "SELECT id, role FROM users WHERE id = ? AND created_by = ?",
+      "SELECT id, first_name, last_name, email, role, phone FROM users WHERE id = ? AND created_by = ?",
       [id, currentUserId]
     );
 
@@ -355,32 +355,26 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
-    const role = existing[0].role;
+    const user = existing[0];
     const connection = await db.getConnection();
     await connection.beginTransaction();
 
     try {
-      // Delete from role-specific table first (FK constraint)
-      switch (role) {
-        case 'admin':
-          await connection.execute("DELETE FROM administrator WHERE id = ?", [id]);
-          break;
-        case 'enseignant':
-          await connection.execute("DELETE FROM teacher WHERE id = ?", [id]);
-          break;
-        case 'etudiant':
-          await connection.execute("DELETE FROM student WHERE id = ?", [id]);
-          break;
-        case 'entreprise':
-          await connection.execute("DELETE FROM external_supervisor WHERE id = ?", [id]);
-          break;
-      }
+      // 1 — Copy to archived_users
+      await connection.execute(
+        `INSERT INTO archived_users (id, first_name, last_name, email, role, phone, archived_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [user.id, user.first_name, user.last_name, user.email, user.role, user.phone, currentUserId]
+      );
 
-      // Then delete from users table
-      await connection.execute("DELETE FROM users WHERE id = ?", [id]);
+      // 2 — Set is_active to 0
+      await connection.execute(
+        "UPDATE users SET is_active = 0 WHERE id = ?",
+        [id]
+      );
 
       await connection.commit();
-      res.status(200).json({ message: "Utilisateur supprimé avec succès" });
+      res.status(200).json({ message: "Utilisateur archivé avec succès" });
 
     } catch (error) {
       await connection.rollback();
@@ -391,7 +385,7 @@ exports.deleteUser = async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Erreur serveur lors de la suppression" });
+    res.status(500).json({ message: "Erreur serveur lors de l'archivage" });
   }
 };
 
@@ -432,6 +426,7 @@ exports.updateUser = async (req, res) => {
       department,
       is_active,
       specialization,
+      rank,
       moyenne,
       speciality_id,
       promo_id,
@@ -452,8 +447,8 @@ exports.updateUser = async (req, res) => {
       switch (role) {
         case 'enseignant':
           await connection.execute(
-            "UPDATE teacher SET grade = ? WHERE id = ?",
-            [specialization || null, id]
+            "UPDATE teacher SET grade = ?, `rank` = ? WHERE id = ?",
+            [specialization || null, rank , id]
           );
           break;
 
@@ -746,6 +741,7 @@ let query = `
          u.phone,                                          
          CONCAT(u.first_name, ' ', u.last_name) AS display_name,
          t.grade AS specialization,
+         t.rank,
          s.moyenne, s.status AS student_status, s.graduation_date, 
          s.speciality_id, s.promo_id,
          sp.name AS speciality_name,
@@ -803,11 +799,13 @@ exports.getMe = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const [users] = await db.execute(
-      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.phone
-       FROM users u
-       WHERE u.id = ?`,
-      [decoded.id]
-    );
+    `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.phone,
+            s.speciality_id                         
+     FROM users u
+     LEFT JOIN student s ON u.id = s.id              
+     WHERE u.id = ?`,
+    [decoded.id]
+  );
 
     if (users.length === 0) {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
@@ -821,6 +819,7 @@ exports.getMe = async (req, res) => {
       email:     user.email,
       role:      user.role,
       phone:     user.phone,
+      speciality_id: user.speciality_id,
     });
 
   } catch (err) {

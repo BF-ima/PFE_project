@@ -13,6 +13,8 @@ const teamRoutes    = require("./routes/teamRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 const userRoutes = require("./routes/userRoutes");
 const wishRoutes = require("./routes/wishRoutes");
+const meetingRoutes = require('./routes/meetingRoutes');
+
 
 const path = require('path');
 
@@ -39,6 +41,11 @@ const limiter = rateLimit({
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
+// TEMPORARY DEBUG — remove after fixing
+app.use((req, res, next) => {
+  console.log(`→ ${req.method} ${req.url}`);
+  next();
+});
 
 // appliquer le limiter uniquement sur la route login
 app.use("/api/auth/login", limiter); 
@@ -56,6 +63,10 @@ app.use("/api/invitations",   require("./routes/invitationRoutes"));
 app.use("/api/wishes",   wishRoutes);
 app.use("/api/messages", require("./routes/messageRoutes"));
 app.use("/api/distribution", require("./routes/distributionRoutes"));
+app.use("/api/deadline", require("./routes/deadlineRoutes"));
+app.use("/api/documents", require("./routes/documentRoutes"));
+app.use('/api/meetings', meetingRoutes);
+
 
 app.use((err, req, res, next) => {
   console.error('Error:', err);
