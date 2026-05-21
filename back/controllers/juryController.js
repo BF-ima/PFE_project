@@ -10,6 +10,7 @@
  */
 
 const db       = require("../config/db");
+const { checkJuryConflict } = require("../utils/scheduleConflicts");
 const jwt      = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
@@ -98,51 +99,177 @@ exports.addJuryMember = async (req, res) => {
     }
 
     const { soutenanceId } = req.params;
-    const { full_name, email, role = "EXAMINER" } = req.body;
+    const { email, role = "EXAMINER", inviteur_name } = req.body;
+const normalizedRoleCheck = (role || "EXAMINER").toUpperCase();
 
-    if (!full_name || !email) {
-      return res.status(400).json({ message: "full_name and email are required." });
-    }
+// INVITEUR: only name + email needed, no DB lookup
+if (normalizedRoleCheck === "INVITEUR") {
+  if (!inviteur_name || !email) {
+    return res.status(400).json({ message: "inviteur_name and email are required for INVITEUR." });
+  }
+  const [result] = await db.execute(
+    `INSERT INTO soutenance_jury (soutenance_id, teacher_id, full_name, email, role, is_inviteur)
+     VALUES (?, NULL, ?, ?, 'INVITEUR', 1)`,
+    [soutenanceId, inviteur_name, email]
+  );
+  return res.status(201).json({
+    message: "Inviteur added.",
+    member: { id: result.insertId, full_name: inviteur_name, email, role: "INVITEUR" },
+  });
+}
 
-    const validRoles = ["PRESIDENT", "RAPPORTEUR", "EXAMINER"];
-    const normalizedRole = role.toUpperCase();
-    if (!validRoles.includes(normalizedRole)) {
-      return res.status(400).json({
-        message: `Invalid role. Must be one of: ${validRoles.join(", ")}`,
-      });
-    }
+if (!email) {
+  return res.status(400).json({ message: "email is required." });
+}
 
-    // Verify soutenance exists
+    const validRoles = ["PRESIDENT", "EXAMINER", "INVITEUR"];
+const normalizedRole = role.toUpperCase();
+if (!validRoles.includes(normalizedRole)) {
+  return res.status(400).json({
+    message: `Invalid role. Must be one of: ${validRoles.join(", ")}`,
+  });
+}
+
+    // Verify soutenance exists and get team_id
     const [sout] = await db.execute(
-      "SELECT id FROM soutenance WHERE id = ?",
+      "SELECT id, team_id FROM soutenance WHERE id = ?",
       [soutenanceId]
     );
     if (!sout.length) {
       return res.status(404).json({ message: "Soutenance not found." });
     }
+    const teamId = sout[0].team_id;
 
-    // PRESIDENT and RAPPORTEUR must be unique per soutenance
-    if (["PRESIDENT", "RAPPORTEUR"].includes(normalizedRole)) {
-      const [dup] = await db.execute(
-        "SELECT id FROM soutenance_jury WHERE soutenance_id = ? AND role = ?",
-        [soutenanceId, normalizedRole]
-      );
-      if (dup.length) {
-        return res.status(409).json({
-          message: `A ${normalizedRole} already exists for this soutenance.`,
-        });
-      }
+   const [teacherRows] = await db.execute(
+  `SELECT t.id, t.rank, t.grade, CONCAT(u.first_name, ' ', u.last_name) AS full_name, u.email
+   FROM teacher t JOIN users u ON u.id = t.id
+   WHERE u.email = ? AND u.is_active = 1`,
+  [email]
+);
+if (!teacherRows.length) {
+  return res.status(404).json({ message: "No active teacher found with this email." });
+}
+const teacher = teacherRows[0];
+const teacher_id = teacher.id;
+
+    // ── NEW: Ensure teacher is NOT the project supervisor ──
+    const supervisorId = await getTeamSupervisorId(teamId);
+    if (supervisorId && parseInt(teacher_id) === parseInt(supervisorId)) {
+      return res.status(422).json({
+        message: "The project supervisor cannot be a jury member.",
+      });
     }
 
+// Rank hierarchy: higher index = lower rank
+const RANK_ORDER = [
+  "Professeur",
+  "Maître_de_conférences_A",
+  "Maître_de_conférences_B",
+  "Maître_Assistant_A",
+  "Maître_Assistant_B"
+];
+const gradeRank = (r) => RANK_ORDER.indexOf(r); // -1 if unknown
+
+if (normalizedRole === "EXAMINER") {
+  const [presidentRows] = await db.execute(
+    `SELECT t.rank AS president_rank
+     FROM soutenance_jury sj JOIN teacher t ON t.id = sj.teacher_id
+     WHERE sj.soutenance_id = ? AND sj.role = 'PRESIDENT'`,
+    [soutenanceId]
+  );
+  if (presidentRows.length) {
+    const pRank = gradeRank(presidentRows[0].president_rank);
+    const eRank = gradeRank(teacher.rank);
+    // Examiner rank must be >= President rank (same or lower in hierarchy)
+    if (eRank !== -1 && pRank !== -1 && eRank < pRank) {
+      return res.status(422).json({
+        message: `Rank conflict: President has rank "${presidentRows[0].president_rank}". Examiner must have the same or lower rank (${RANK_ORDER.slice(pRank).join(", ")}).`,
+      });
+    }
+  }
+}
+
+if (normalizedRole === "PRESIDENT") {
+  const [examinerRows] = await db.execute(
+   `SELECT t.rank AS examiner_rank
+     FROM soutenance_jury sj JOIN teacher t ON t.id = sj.teacher_id
+     WHERE sj.soutenance_id = ? AND sj.role = 'EXAMINER'`,
+    [soutenanceId]
+  );
+  for (const ex of examinerRows) {
+    const pRank = gradeRank(teacher.rank);
+    const eRank = gradeRank(ex.examiner_rank);
+    // President must be >= Examiner (same or higher)
+    if (pRank !== -1 && eRank !== -1 && pRank > eRank) {
+      return res.status(422).json({
+        message: `Rank conflict: President rank "${teacher.rank}" is lower than existing Examiner rank "${ex.examiner_rank}". President must have equal or higher rank.`,
+      });
+    }
+  }
+}
+
+   // Only one PRESIDENT allowed per soutenance
+if (normalizedRole === "PRESIDENT") {
+  const [dup] = await db.execute(
+    "SELECT id FROM soutenance_jury WHERE soutenance_id = ? AND role = 'PRESIDENT'",
+    [soutenanceId]
+  );
+  if (dup.length) {
+    return res.status(409).json({ message: "A PRESIDENT already exists for this soutenance." });
+  }
+}
+// Only one EXAMINER allowed per soutenance
+if (normalizedRole === "EXAMINER") {
+  const [dup] = await db.execute(
+    "SELECT id FROM soutenance_jury WHERE soutenance_id = ? AND role = 'EXAMINER'",
+    [soutenanceId]
+  );
+  if (dup.length) {
+    return res.status(409).json({ message: "An EXAMINER already exists for this soutenance." });
+  }
+}
+
+    // ── CHANGE: also prevent same teacher in two roles ──
+    const [dupTeacher] = await db.execute(
+      "SELECT id FROM soutenance_jury WHERE soutenance_id = ? AND teacher_id = ?",
+      [soutenanceId, teacher_id]
+    );
+    if (dupTeacher.length) {
+      return res.status(409).json({
+        message: "This teacher is already assigned to this soutenance.",
+      });
+    }
+
+    // ── Jury schedule conflict check ──
+// Fetch the soutenance date and time
+const [soutTime] = await db.execute(
+  "SELECT date, time FROM soutenance WHERE id = ?",
+  [soutenanceId]
+);
+if (soutTime.length && soutTime[0].date && soutTime[0].time) {
+  const conflict = await checkJuryConflict(
+    teacher_id,
+    soutTime[0].date,
+    soutTime[0].time,
+    parseInt(soutenanceId)
+  );
+  if (conflict) {
+    return res.status(409).json({
+      message: `${teacher.full_name} is already assigned to another defense on this date at ${conflict.time} (role: ${conflict.role}). A defense takes 2 hours — they will not be free in time.`,
+    });
+  }
+}
+
+    // ── CHANGE: Insert with teacher_id, full_name, email from teacher table ──
     const [result] = await db.execute(
-      `INSERT INTO soutenance_jury (soutenance_id, full_name, email, role)
-       VALUES (?, ?, ?, ?)`,
-      [soutenanceId, full_name, email.toLowerCase().trim(), normalizedRole]
+      `INSERT INTO soutenance_jury (soutenance_id, teacher_id, full_name, email, role)
+       VALUES (?, ?, ?, ?, ?)`,
+      [soutenanceId, teacher_id, teacher.full_name, teacher.email, normalizedRole]
     );
 
     res.status(201).json({
       message: "Jury member added.",
-      member: { id: result.insertId, full_name, email, role: normalizedRole },
+      member: { id: result.insertId, full_name: teacher.full_name, email: teacher.email, role: normalizedRole },
     });
   } catch (err) {
     console.error("addJuryMember error:", err);
@@ -167,7 +294,7 @@ exports.getJuryMembers = async (req, res) => {
       `SELECT id, full_name, email, role, added_at
        FROM soutenance_jury
        WHERE soutenance_id = ?
-       ORDER BY FIELD(role, 'PRESIDENT', 'RAPPORTEUR', 'EXAMINER'), added_at ASC`,
+       ORDER BY FIELD(role, 'PRESIDENT', 'EXAMINER', 'INVITEUR'), added_at ASC`,
       [soutenanceId]
     );
 
@@ -372,13 +499,13 @@ const deliverableLinksHtml = deliverables.length
 
 // Validate exactly 1 PRESIDENT, 1 RAPPORTEUR, 1 EXAMINER (no duplicates allowed)
 const roles = juryRows.map(j => j.role);
-const missingRoles = ["PRESIDENT", "RAPPORTEUR", "EXAMINER"].filter(r => !roles.includes(r));
+const missingRoles = ["PRESIDENT", "EXAMINER"].filter(r => !roles.includes(r));
 if (missingRoles.length > 0) {
   return res.status(422).json({
-    message: `Cannot approve jury: missing role(s) — ${missingRoles.join(", ")}. All three (PRESIDENT, RAPPORTEUR, EXAMINER) are required.`,
+    message: `Cannot approve jury: missing role(s) — ${missingRoles.join(", ")}. Both PRESIDENT and EXAMINER are required.`,
   });
 }
-const duplicateRoles = ["PRESIDENT", "RAPPORTEUR", "EXAMINER"].filter(
+const duplicateRoles = ["PRESIDENT", "EXAMINER"].filter(
   r => roles.filter(x => x === r).length > 1
 );
 if (duplicateRoles.length > 0) {
@@ -416,7 +543,11 @@ const supervisorName = supRows[0]?.full_name || "—";
 // Build jury list string (juryRows is fetched at line 344, already available)
 const juryStr = juryRows.map(j => {
   const r = j.role === "PRESIDENT" ? "President"
-          : j.role === "RAPPORTEUR" ? "Rapporteur" : "Examiner";
+          : j.role === "INVITEUR"  ? "Inviteur"   : "Examiner";
+  const roleColor = j.role === "PRESIDENT" ? "#7c3aed"
+                : j.role === "INVITEUR"  ? "#b45309" : "#15803d";
+const roleBg   = j.role === "PRESIDENT" ? "#f3f0ff"
+                : j.role === "INVITEUR"  ? "#fef3c7" : "#dcfce7";
   return `${j.full_name} (${r})`;
 }).join(", ");
 
@@ -665,6 +796,51 @@ await db.execute(
 
   } catch (err) {
     console.error("notifyJury error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * GET /api/jury/:soutenanceId/available-teachers
+ * Returns all teachers from the teacher table, excluding the project supervisor.
+ * Used by the frontend dropdown when adding a jury member.
+ */
+exports.getAvailableTeachers = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+
+  try {
+    const user = await getUserFromToken(token);
+    if (user.role !== "super_admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { soutenanceId } = req.params;
+
+    // Get team_id from soutenance
+    const [sout] = await db.execute(
+      "SELECT team_id FROM soutenance WHERE id = ? LIMIT 1",
+      [soutenanceId]
+    );
+    if (!sout.length) return res.status(404).json({ message: "Soutenance not found." });
+
+    const supervisorId = await getTeamSupervisorId(sout[0].team_id);
+
+    // Fetch all teachers except the supervisor
+    const [teachers] = await db.execute(
+      `SELECT t.id, t.rank, t.grade, t.department,
+              CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+              u.email
+       FROM teacher t
+       JOIN users u ON u.id = t.id
+       WHERE t.id != ? AND u.is_active = 1
+       ORDER BY t.rank ASC, u.last_name ASC`,
+      [supervisorId || 0]
+    );
+
+    res.json({ teachers });
+  } catch (err) {
+    console.error("getAvailableTeachers error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

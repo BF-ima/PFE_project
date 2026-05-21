@@ -54,10 +54,19 @@ const validateGrade = (val) => {
 };
 
 // Compute average of up to 4 grade components
-const computeAverage = (oral, deliverables, demo, qa) => {
-  const vals = [oral, deliverables, demo, qa].filter((v) => v !== null);
-  if (!vals.length) return null;
-  return parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2));
+// Weighted average: sum(grade * coef) / sum(coef)
+const computeAverage = (oral, deliverables, demo, qa, coefOral = 1, coefDeliv = 1, coefDemo = 1, coefQa = 1) => {
+  const pairs = [
+    [oral,         coefOral],
+    [deliverables, coefDeliv],
+    [demo,         coefDemo],
+    [qa,           coefQa],
+  ].filter(([v]) => v !== null && v !== undefined);
+  if (!pairs.length) return null;
+  const weightedSum = pairs.reduce((acc, [v, c]) => acc + v * c, 0);
+  const totalCoef   = pairs.reduce((acc, [, c]) => acc + c, 0);
+  if (totalCoef === 0) return null;
+  return parseFloat((weightedSum / totalCoef).toFixed(2));
 };
 
 // ─────────────────────────────────────────────
@@ -81,7 +90,11 @@ exports.enterGrades = async (req, res) => {
     }
 
     const { soutenanceId } = req.params;
-    const { grade_oral, grade_deliverables, grade_demo, grade_qa, jury_observations } = req.body;
+    const {
+  grade_oral, grade_deliverables, grade_demo, grade_qa,
+  coef_oral, coef_deliverables, coef_demo, coef_qa,
+  jury_observations
+} = req.body;
 
     // Validate each provided grade
     const oral  = grade_oral         !== undefined ? validateGrade(grade_oral)         : undefined;
@@ -99,6 +112,27 @@ exports.enterGrades = async (req, res) => {
     if (hasInvalid) {
       return res.status(400).json({ message: "All grades must be numbers between 0 and 20." });
     }
+    // Validate coefficients: must be between 0 and 10 if provided
+const validateCoef = (val) => {
+  if (val === undefined || val === null) return undefined;
+  const n = parseFloat(val);
+  return !isNaN(n) && n >= 0 && n <= 10 ? n : null;
+};
+const cOral  = validateCoef(coef_oral);
+const cDeliv = validateCoef(coef_deliverables);
+const cDemo  = validateCoef(coef_demo);
+const cQa    = validateCoef(coef_qa);
+
+const hasInvalidCoef = [
+  [coef_oral,          cOral],
+  [coef_deliverables,  cDeliv],
+  [coef_demo,          cDemo],
+  [coef_qa,            cQa],
+].some(([raw, parsed]) => raw !== undefined && parsed === null);
+
+if (hasInvalidCoef) {
+  return res.status(400).json({ message: "All coefficients must be numbers between 0 and 10." });
+}
 
     // Fetch soutenance
     const [rows] = await db.execute(
@@ -116,34 +150,44 @@ exports.enterGrades = async (req, res) => {
       });
     }
 
-    // Update grade columns (keep existing values for any column not provided)
     await db.execute(
-      `UPDATE soutenance
-       SET grade_oral         = COALESCE(?, grade_oral),
-           grade_deliverables = COALESCE(?, grade_deliverables),
-           grade_demo         = COALESCE(?, grade_demo),
-           grade_qa           = COALESCE(?, grade_qa),
-           jury_observations  = COALESCE(?, jury_observations),
-           grade_status       = 'NOTED',
-           updated_at         = NOW()
-       WHERE id = ?`,
-      [
-        oral  ?? null,
-        deliv ?? null,
-        demo  ?? null,
-        qa    ?? null,
-        jury_observations || null,
-        soutenanceId,
-      ]
-    );
+  `UPDATE soutenance
+   SET grade_oral         = COALESCE(?, grade_oral),
+       grade_deliverables = COALESCE(?, grade_deliverables),
+       grade_demo         = COALESCE(?, grade_demo),
+       grade_qa           = COALESCE(?, grade_qa),
+       coef_oral          = COALESCE(?, coef_oral),
+       coef_deliverables  = COALESCE(?, coef_deliverables),
+       coef_demo          = COALESCE(?, coef_demo),
+       coef_qa            = COALESCE(?, coef_qa),
+       jury_observations  = COALESCE(?, jury_observations),
+       grade_status       = 'NOTED',
+       updated_at         = NOW()
+   WHERE id = ?`,
+  [
+    oral  ?? null,
+    deliv ?? null,
+    demo  ?? null,
+    qa    ?? null,
+    cOral  ?? null,
+    cDeliv ?? null,
+    cDemo  ?? null,
+    cQa    ?? null,
+    jury_observations || null,
+    soutenanceId,
+  ]
+);
 
-    // Compute final average using freshest values
     const average = computeAverage(
-      oral  ?? s.grade_oral,
-      deliv ?? s.grade_deliverables,
-      demo  ?? s.grade_demo,
-      qa    ?? s.grade_qa
-    );
+  oral  ?? s.grade_oral,
+  deliv ?? s.grade_deliverables,
+  demo  ?? s.grade_demo,
+  qa    ?? s.grade_qa,
+  cOral  ?? s.coef_oral  ?? 1,
+  cDeliv ?? s.coef_deliverables ?? 1,
+  cDemo  ?? s.coef_demo  ?? 1,
+  cQa    ?? s.coef_qa    ?? 1
+);
 
     if (average !== null) {
       const [existing] = await db.execute(
@@ -184,18 +228,20 @@ exports.getGrades = async (req, res) => {
     const { soutenanceId } = req.params;
 
     const [rows] = await db.execute(
-      `SELECT s.id,
-              s.grade_oral, s.grade_deliverables, s.grade_demo, s.grade_qa,
-              s.jury_observations, s.grade_status,
-              sr.grade AS final_grade,
-              p.title  AS project_title,
-              s.date, s.time, s.room_name
-       FROM soutenance s
-       JOIN project p ON p.id = s.project_id
-       LEFT JOIN soutenance_result sr ON sr.soutenance_id = s.id
-       WHERE s.id = ?`,
-      [soutenanceId]
-    );
+  `SELECT s.id,
+          s.grade_oral, s.grade_deliverables, s.grade_demo, s.grade_qa,
+          s.coef_oral,  s.coef_deliverables,  s.coef_demo,  s.coef_qa,
+          s.jury_observations, s.grade_status,
+          sr.grade AS final_grade,
+          p.title  AS project_title,
+          s.date, s.time, s.room_name
+   FROM soutenance s
+   JOIN project p ON p.id = s.project_id
+   LEFT JOIN soutenance_result sr ON sr.soutenance_id = s.id
+   WHERE s.id = ?`,
+  [soutenanceId]
+);
+
     if (!rows.length) {
       return res.status(404).json({ message: "Soutenance not found." });
     }
@@ -432,6 +478,10 @@ exports.bulkImportGrades = async (req, res) => {
       const gradeDemo         = row["grade_demo"]         ?? row["Demo / Application"];
       const gradeQa           = row["grade_qa"]           ?? row["Q&A Responses"];
       const juryObs           = row["jury_observations"]  ?? row["Jury Observations"] ?? "";
+      const coefOral         = row["coef_oral"]         ?? row["Coef Oral"]         ?? 1;
+      const coefDeliverables = row["coef_deliverables"]  ?? row["Coef Deliverables"] ?? 1;
+      const coefDemo         = row["coef_demo"]          ?? row["Coef Demo"]         ?? 1;
+      const coefQa           = row["coef_qa"]            ?? row["Coef Q&A"]          ?? 1;
 
       if (!soutenanceId) {
         errors.push({ row, reason: "Missing soutenance_id" });
@@ -465,22 +515,25 @@ exports.bulkImportGrades = async (req, res) => {
         continue;
       }
 
-      // Update grades
       await db.execute(
-        `UPDATE soutenance
-         SET grade_oral         = ?,
-             grade_deliverables = ?,
-             grade_demo         = ?,
-             grade_qa           = ?,
-             jury_observations  = ?,
-             grade_status       = 'NOTED',
-             updated_at         = NOW()
-         WHERE id = ?`,
-        [oral, deliv, demo, qa, juryObs, soutenanceId]
-      );
+  `UPDATE soutenance
+   SET grade_oral         = ?,
+       grade_deliverables = ?,
+       grade_demo         = ?,
+       grade_qa           = ?,
+       coef_oral          = ?,
+       coef_deliverables  = ?,
+       coef_demo          = ?,
+       coef_qa            = ?,
+       jury_observations  = ?,
+       grade_status       = 'NOTED',
+       updated_at         = NOW()
+   WHERE id = ?`,
+  [oral, deliv, demo, qa, parseFloat(coefOral), parseFloat(coefDeliverables), parseFloat(coefDemo), parseFloat(coefQa), juryObs, soutenanceId]
+);
 
       // Upsert soutenance_result with average
-      const average = computeAverage(oral, deliv, demo, qa);
+      const average = computeAverage(oral, deliv, demo, qa, parseFloat(coefOral), parseFloat(coefDeliverables), parseFloat(coefDemo), parseFloat(coefQa));
       const [resRow] = await db.execute(
         "SELECT id FROM soutenance_result WHERE soutenance_id = ?",
         [soutenanceId]

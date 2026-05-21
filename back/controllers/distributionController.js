@@ -377,6 +377,54 @@ exports.getDistributionResults = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
+// -----------------------------------------------------------------------------
+// EXPORT RESULTS  GET /api/distribution/export
+// Returns full data needed for the Excel export
+// -----------------------------------------------------------------------------
+exports.exportResults = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Non authentifié" });
+
+  try {
+    const user = await getUserFromToken(token);
+    if (!["admin", "super_admin"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+         t.id                                         AS team_id,
+         p.title                                      AS project_title,
+         CONCAT(sup.first_name, ' ', sup.last_name)   AS supervisor,
+         ROUND(AVG(s.moyenne), 2)                     AS team_average,
+         GROUP_CONCAT(
+           CONCAT(u.first_name, ' ', u.last_name)
+           ORDER BY u.first_name
+           SEPARATOR ', '
+         )                                            AS members,
+         (SELECT w.priority
+          FROM wish w
+          WHERE w.team_id = t.id AND w.project_id = p.id
+            AND w.status = 'SUBMITTED'
+          LIMIT 1)                                    AS assigned_priority
+       FROM assignment a
+       JOIN team        t   ON t.id  = a.team_id
+       JOIN project     p   ON p.id  = a.project_id
+       LEFT JOIN users  sup ON sup.id = p.teacher_id
+       JOIN team_member tm  ON tm.team_id = t.id
+       JOIN student     s   ON s.id  = tm.student_id
+       JOIN users       u   ON u.id  = s.id
+       GROUP BY t.id, p.title, supervisor, a.assigned_at
+       ORDER BY t.id ASC`
+    );
+
+    res.json({ rows });
+
+  } catch (err) {
+    console.error("exportResults error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
 
 // -----------------------------------------------------------------------------
 // GET UNASSIGNED TEAMS

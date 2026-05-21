@@ -34,6 +34,7 @@ const upload = multer({
   },
 });
 
+
 // ═══════════════════════════════════════════════════════════════
 //  DEFENSE REQUESTS   /api/soutenance/requests
 // ═══════════════════════════════════════════════════════════════
@@ -63,8 +64,13 @@ router.post("/soutenance", soutenanceCtrl.createSoutenance);
 // List all soutenances — query: ?status=SCHEDULED|COMPLETED  ?grade_status=PENDING|NOTED|PUBLISHED
 router.get("/soutenance", soutenanceCtrl.getSoutenances);
 
+// Get the logged-in student's published result
+router.get("/soutenance/my-result", soutenanceCtrl.getMyResult);
+
 // Get single soutenance with jury members + deliverables
 router.get("/soutenance/:id", soutenanceCtrl.getSoutenanceById);
+
+router.put("/soutenance/:id/schedule", soutenanceCtrl.scheduleSoutenance);
 
 // Update date / time / room → re-notifies jury and team
 router.put("/soutenance/:id", soutenanceCtrl.updateSoutenance);
@@ -87,6 +93,8 @@ router.delete("/jury/:soutenanceId/members/:memberId", juryCtrl.removeJuryMember
 
 // Send HTML emails to jury + in-app notifications to team (requires date/time/room set)
 router.post("/jury/:soutenanceId/notify", juryCtrl.notifyJury);
+
+router.get("/jury/:soutenanceId/available-teachers", juryCtrl.getAvailableTeachers);
 
 // ═══════════════════════════════════════════════════════════════
 //  GRADES             /api/grades
@@ -111,5 +119,6 @@ router.post("/grades/:soutenanceId/publish", gradeCtrl.publishGrades);
 
 // Publish ALL soutenances in NOTED state at once
 router.post("/publish-all", gradeCtrl.publishAllGrades);
+router.patch("/soutenance/:id/publish", soutenanceCtrl.publishResult);
 
 module.exports = router;

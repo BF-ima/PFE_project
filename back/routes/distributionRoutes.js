@@ -12,5 +12,6 @@ router.get("/teams",      ctrl.getTeamsWithAverages);
 router.post("/publish",   publishController.publishResults);
 router.get("/my-result", ctrl.getMyResult);
 router.get("/statistics", ctrl.getStatistics);
+router.get("/export", ctrl.exportResults);
 
 module.exports = router;

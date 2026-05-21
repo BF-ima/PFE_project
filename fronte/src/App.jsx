@@ -33,6 +33,8 @@ import DocumentsPage from './component/student/DocumentsPage';
 import SupervisorDocumentsPage from './component/supervisor/DocumentsPage';
 import MeetingManagement from './component/supervisor/MeetingManagement';
 import StudentMeetingPage from './component/student/StudentMeetingPage';
+import ResultPage from "./component/student/ResultPage";   
+
 
 
 
@@ -64,6 +66,7 @@ function App() {
         <Route index path='/allocationresults' element={<AllocationResults />} /> {/*Admin session */}
         <Route index path='/teams-list' element={<TeamsList />} /> {/*Admin session */}
         <Route index path='/admin-notifications' element={<AdminNotifications />} /> {/*Admin session */}
+        <Route index path='/notifications' element={<AdminNotifications />} />
         <Route index path='/messaging' element={<Messaging />} /> {/*Admin session */}
         <Route index path='/announcements' element={<Announcements />} /> {/*Admin session */}
         <Route index path='/defense-manage' element={<DefenseManagement />} /> {/*Admin session */}
@@ -73,7 +76,8 @@ function App() {
         <Route path='student/documents' element={<DocumentsPage />} />
         <Route path='supervisor/documents' element={<SupervisorDocumentsPage />} />
         <Route path='supervisor/meetings' element={<MeetingManagement />} />
-         <Route path='student/meetings' element={<StudentMeetingPage />} />
+        <Route path='student/meetings' element={<StudentMeetingPage />} />
+        <Route path="/student/results" element={<ResultPage />} />
       </Routes>
     </>
   )

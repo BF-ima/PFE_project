@@ -1,40 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutGrid, UsersRound, Star, MessageCircle, Bell, Folder, Calendar
+  LayoutGrid, UsersRound, Star, MessageCircle, Bell, Folder, Calendar,Trophy 
 } from 'lucide-react';
 
 const StudentSidebar = () => {
   const location = useLocation();
-  const [unreadCount, setUnreadCount] = useState(0);
+ const [unreadCount, setUnreadCount] = useState(0);
+const [pendingInvites, setPendingInvites] = useState(0);
 
-  useEffect(() => {
-    const fetchUnread = async () => {
-      try {
-        const res = await fetch("http://localhost:3000/api/notifications", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
+useEffect(() => {
+  const fetchUnread = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [notifRes, inviteRes] = await Promise.all([
+        fetch("http://localhost:3000/api/notifications", { headers }),
+        fetch("http://localhost:3000/api/invitations",   { headers }),
+      ]);
+
+      if (notifRes.ok) {
+        const data = await notifRes.json();
         setUnreadCount(data.unread_count || 0);
-      } catch {
-        // silently fail
       }
-    };
+      if (inviteRes.ok) {
+        const data = await inviteRes.json();
+        const pending = (data.invitations || []).filter(i => i.status === "PENDING").length;
+        setPendingInvites(pending);
+      }
+    } catch {
+      // silently fail
+    }
+  };
 
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000); // poll every 30s
-    return () => clearInterval(interval);
-  }, []);
+  fetchUnread();
+  const interval = setInterval(fetchUnread, 30000);
+  return () => clearInterval(interval);
+}, []);
 
   const menuItems = [
     { icon: LayoutGrid,    path: '/student/firstpage',          label: 'Dashboard' },
     { icon: UsersRound,    path: '/student/TeamManagementPage', label: 'Team Management' },
     { icon: Star,          path: '/student/preferencelist',     label: 'Preference List' },
     { icon: MessageCircle, path: '/student/chatpage',           label: 'Chat' },
-    { icon: Bell,          path: '/student/notifications',      label: 'Notifications', badge: unreadCount },
+    { icon: Bell, path: '/student/notifications', label: 'Notifications', badge: unreadCount + pendingInvites },
     { icon: Folder,        path: '/student/documents',          label: 'Documents & Resources' },
     { icon: Calendar, path: '/student/meetings', label: 'Meeting Management' },
+    { icon: Trophy,   path: '/student/results',  label: 'My Results' },
   ];
 
   return (

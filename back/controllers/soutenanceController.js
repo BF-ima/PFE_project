@@ -8,6 +8,7 @@
  */
 
 const db  = require("../config/db");
+const { checkRoomConflict } = require("../utils/scheduleConflicts");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
@@ -60,6 +61,9 @@ const getTeamSupervisorId = async (teamId) => {
   );
   return rows[0]?.supervisor_id || null;
 };
+
+
+
 
 // ─────────────────────────────────────────────
 //  DEFENSE REQUESTS
@@ -189,17 +193,25 @@ exports.getRequests = async (req, res) => {
     );
 
     // Enrich each request with Cloudinary deliverable URLs
-    const requests = await Promise.all(
-      rows.map(async (row) => {
-        const [deliverables] = await db.execute(
-          `SELECT title, file_path FROM deliverable
-           WHERE team_id = ? AND status = 'APPROVED'
-           ORDER BY title`,
-          [row.team_id]
-        );
-        return { ...row, deliverables };
-      })
+   const requests = await Promise.all(
+  rows.map(async (row) => {
+    const [deliverables] = await db.execute(
+      `SELECT title, file_path FROM deliverable
+       WHERE team_id = ? AND status = 'APPROVED'
+       ORDER BY title`,
+      [row.team_id]
     );
+    const [members] = await db.execute(
+      `SELECT CONCAT(u.first_name, ' ', u.last_name) AS full_name
+       FROM team_member tm
+       JOIN users u ON u.id = tm.student_id
+       WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'
+       ORDER BY u.first_name`,
+      [row.team_id]
+    );
+    return { ...row, deliverables, members: members.map(m => m.full_name) };
+  })
+);
 
     res.json({ requests });
   } catch (err) {
@@ -370,7 +382,6 @@ exports.rejectRequest = async (req, res) => {
     );
 
     // Notify supervisor
-   // ✅ REPLACE lines 379–385 with:
 const commentText = comment ? `\nReason: ${comment}` : "";
 await sendNotification(
   sr.teacher_id,
@@ -539,6 +550,265 @@ exports.updateSoutenance = async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ message: "Soutenance not found." });
 
+   // ── Room conflict check ──
+    const effectiveDate = date      || rows[0].date;
+    const effectiveTime = time      || rows[0].time;
+    const effectiveRoom = room_name || rows[0].room_name;
+
+    if (effectiveDate && effectiveTime && effectiveRoom) {
+      const roomConflict = await checkRoomConflict(effectiveRoom, effectiveDate, effectiveTime, id);
+      if (roomConflict) {
+        return res.status(409).json({
+          message: `Room "${effectiveRoom}" is already booked on this date at ${roomConflict.time}. A defense takes 2 hours — please choose a different room or time.`,
+        });
+      }
+    }
+
+await db.execute(
+  `UPDATE soutenance
+   SET date = COALESCE(?, date),
+       time = COALESCE(?, time),
+       room_name = COALESCE(?, room_name),
+       updated_at = NOW()
+   WHERE id = ?`,
+  [date || null, time || null, room_name || null, id]
+);
+
+  
+
+   const s = rows[0];
+
+    // Use effective values (what was actually saved)
+    const finalDate = date      || s.date;
+    const finalTime = time      || s.time;
+    const finalRoom = room_name || s.room_name;
+
+    // Format date for display
+    const formattedDate = finalDate
+      ? new Date(finalDate).toLocaleDateString("en-GB", {
+          weekday: "long", year: "numeric", month: "long", day: "numeric",
+        })
+      : "—";
+
+    // Fetch project title
+    const [projRows] = await db.execute(
+      "SELECT title FROM project WHERE id = ?",
+      [s.project_id]
+    );
+    const projectTitle = projRows[0]?.title || "—";
+
+    // Fetch team members (for in-app notification + email)
+    const [teamMembersRows] = await db.execute(
+      `SELECT u.id, u.email, CONCAT(u.first_name, ' ', u.last_name) AS full_name
+       FROM team_member tm
+       JOIN users u ON u.id = tm.student_id
+       WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'`,
+      [s.team_id]
+    );
+
+    // Fetch jury members (for in-app notification + email, includes INVITEUR)
+    const [juryRows] = await db.execute(
+      "SELECT full_name, email, role FROM soutenance_jury WHERE soutenance_id = ?",
+      [id]
+    );
+
+    // Fetch supervisor id, name, email
+    const supervisorId = await getTeamSupervisorId(s.team_id);
+    let supervisorEmail = null;
+    let supervisorName  = "—";
+    if (supervisorId) {
+      const [supRow] = await db.execute(
+        `SELECT u.email, CONCAT(u.first_name, ' ', u.last_name) AS full_name
+         FROM users u WHERE u.id = ?`,
+        [supervisorId]
+      );
+      supervisorEmail = supRow[0]?.email || null;
+      supervisorName  = supRow[0]?.full_name || "—";
+    }
+
+    // ── In-app notifications ──
+    const scheduleMsg =
+      `📋 Project: ${projectTitle}\n` +
+      `📅 Date: ${formattedDate}\n` +
+      `🕐 Time: ${finalTime}\n` +
+      `📍 Room: ${finalRoom}`;
+
+    // Notify team students
+    for (const member of teamMembersRows) {
+      await sendNotification(member.id, "info", "Defense Schedule Updated", scheduleMsg);
+    }
+    // Notify supervisor
+    if (supervisorId) {
+      await sendNotification(supervisorId, "info", "Defense Schedule Updated", scheduleMsg);
+    }
+
+    // ── Email builder ──
+    const buildEmail = (recipientName, roleLabel) => `
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+         style="background-color:#f0f4f8;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="600"
+             style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;
+                    overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#193962,#2D8FBF);padding:32px 40px 24px;">
+            <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">⚠️ Defense Schedule Updated</h1>
+            <p style="margin:4px 0 0;color:#c8dff0;font-size:13px;">The defense session has been rescheduled.</p>
+          </td>
+        </tr>
+        <!-- Role badge -->
+        <tr>
+          <td style="background:#eaf2fb;padding:12px 40px;border-bottom:1px solid #dce8f3;">
+            <p style="margin:0;font-size:13px;color:#555555;">
+              Dear <strong>${recipientName}</strong>&nbsp;—&nbsp;
+              <span style="background:#193962;color:#fff;font-size:11px;font-weight:700;
+                           padding:3px 12px;border-radius:20px;">${roleLabel}</span>
+            </p>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:28px 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+                   style="background:#f8fafc;border:1px solid #dce8f3;border-radius:8px;margin-bottom:20px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#2D8FBF;
+                             text-transform:uppercase;letter-spacing:1.5px;">Updated Defense Details</p>
+                  <table role="presentation" cellpadding="4" cellspacing="0" width="100%">
+                    <tr>
+                      <td style="font-size:13px;color:#555;width:120px;">📋 Project</td>
+                      <td style="font-size:13px;color:#193962;font-weight:600;">${projectTitle}</td>
+                    </tr>
+                    <tr>
+                      <td style="font-size:13px;color:#555;">📅 Date</td>
+                      <td style="font-size:13px;color:#193962;font-weight:600;">${formattedDate}</td>
+                    </tr>
+                    <tr>
+                      <td style="font-size:13px;color:#555;">🕐 Time</td>
+                      <td style="font-size:13px;color:#193962;font-weight:600;">${finalTime}</td>
+                    </tr>
+                    <tr>
+                      <td style="font-size:13px;color:#555;">📍 Room</td>
+                      <td style="font-size:13px;color:#193962;font-weight:600;">${finalRoom}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+            <p style="font-size:13px;color:#555;padding:12px 16px;background:#fffbeb;
+                      border-left:3px solid #f59e0b;border-radius:4px;margin:0;">
+              ⚠️ Please note the updated schedule and adjust your availability accordingly.
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f4f7fb;border-top:1px solid #dce8f3;padding:16px 40px;">
+            <p style="margin:0;font-size:11px;color:#999;">
+              Automated notification from
+              <strong style="color:#193962;">ESI-SBA PFE Platform</strong>. Do not reply.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    // ── Send emails to jury (PRESIDENT, EXAMINER, INVITEUR) ──
+    for (const member of juryRows) {
+      const roleLabel = member.role === "PRESIDENT"   ? "President"
+                      : member.role === "EXAMINER"    ? "Examiner"
+                      : member.role === "INVITEUR"    ? "Invited Guest"
+                      : member.role;
+      try {
+        await transporter.sendMail({
+          from:    `"ESI-SBA PFE Platform" <${process.env.SMTP_USER}>`,
+          to:      member.email,
+          subject: `Defense Schedule Updated – ${projectTitle} | ESI-SBA PFE`,
+          html:    buildEmail(member.full_name, roleLabel),
+        });
+      } catch (mailErr) {
+        console.error(`Failed to send update email to jury ${member.email}:`, mailErr.message);
+      }
+    }
+
+    // ── Send emails to team students ──
+    for (const member of teamMembersRows) {
+      try {
+        await transporter.sendMail({
+          from:    `"ESI-SBA PFE Platform" <${process.env.SMTP_USER}>`,
+          to:      member.email,
+          subject: `Defense Schedule Updated – ${projectTitle} | ESI-SBA PFE`,
+          html:    buildEmail(member.full_name, "Team Member"),
+        });
+      } catch (mailErr) {
+        console.error(`Failed to send update email to student ${member.email}:`, mailErr.message);
+      }
+    }
+
+    // ── Send email to supervisor ──
+    if (supervisorEmail) {
+      try {
+        await transporter.sendMail({
+          from:    `"ESI-SBA PFE Platform" <${process.env.SMTP_USER}>`,
+          to:      supervisorEmail,
+          subject: `Defense Schedule Updated – ${projectTitle} | ESI-SBA PFE`,
+          html:    buildEmail(supervisorName, "Supervisor"),
+        });
+      } catch (mailErr) {
+        console.error(`Failed to send update email to supervisor ${supervisorEmail}:`, mailErr.message);
+      }
+    }
+
+   res.json({ message: "Soutenance updated. Jury, team, and supervisor notified." });
+  } catch (err) {
+    console.error("updateSoutenance error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─────────────────────────────────────────────
+// PUT /api/soutenance/:id/schedule   ← NEW endpoint for first-time scheduling
+// Notifies supervisor + team members only. No jury email.
+// ─────────────────────────────────────────────
+exports.scheduleSoutenance = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+
+  try {
+    const user = await getUserFromToken(token);
+    if (user.role !== "super_admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { id } = req.params;
+    const { date, time, room_name } = req.body;
+
+    const [rows] = await db.execute("SELECT * FROM soutenance WHERE id = ?", [id]);
+    if (!rows.length) return res.status(404).json({ message: "Soutenance not found." });
+
+    
+
+    // Fetch team member names (for notification message)
+    // ── Room conflict check ──
+    const newDate = date      || rows[0].date;
+    const newTime = time      || rows[0].time;
+    const newRoom = room_name || rows[0].room_name;
+
+    if (newDate && newTime && newRoom) {
+      const roomConflict = await checkRoomConflict(newRoom, newDate, newTime, id);
+      if (roomConflict) {
+        return res.status(409).json({
+          message: `Room "${newRoom}" is already booked on this date at ${roomConflict.time}. A defense takes 2 hours — please choose a different room or time.`,
+        });
+      }
+    }
+
     await db.execute(
       `UPDATE soutenance
        SET date = COALESCE(?, date),
@@ -549,157 +819,58 @@ exports.updateSoutenance = async (req, res) => {
       [date || null, time || null, room_name || null, id]
     );
 
-  
-
     const s = rows[0];
 
-// Fetch team members for the message
-const [teamMembersRows] = await db.execute(
-  `SELECT CONCAT(u.first_name, ' ', u.last_name) AS full_name
-   FROM team_member tm
-   JOIN users u ON u.id = tm.student_id
-   WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'`,
-  [s.team_id]
-);
-const teamMembersStr = teamMembersRows.map(m => m.full_name).join(", ") || "—";
+    // Fetch project title
+    const [projRows] = await db.execute("SELECT title FROM project WHERE id = ?", [s.project_id]);
+    const projectTitle = projRows[0]?.title || "—";
 
-// Fetch jury members for the message
-const [juryRows] = await db.execute(
-  "SELECT full_name, email, role FROM soutenance_jury WHERE soutenance_id = ?",
-  [id]
-);
-const juryStr = juryRows.map(j => {
-  const r = j.role === "PRESIDENT" ? "President"
-          : j.role === "RAPPORTEUR" ? "Rapporteur" : "Examiner";
-  return `${j.full_name} (${r})`;
-}).join(", ");
+    // Fetch supervisor id and name
+    const supervisorId = await getTeamSupervisorId(s.team_id);
+    const [supervisorRow] = await db.execute(
+      `SELECT CONCAT(u.first_name, ' ', u.last_name) AS full_name FROM users u WHERE u.id = ?`,
+      [supervisorId]
+    );
+    const supervisorName = supervisorRow[0]?.full_name || "—";
 
-// Fetch project title
-const [projRows] = await db.execute(
-  "SELECT title FROM project WHERE id = ?",
-  [s.project_id]
-);
-const projectTitle = projRows[0]?.title || "—";
+    // Fetch team member names (for notification message)
+    const [tmRows] = await db.execute(
+      `SELECT CONCAT(u.first_name, ' ', u.last_name) AS full_name
+       FROM team_member tm JOIN users u ON u.id = tm.student_id
+       WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'`,
+      [s.team_id]
+    );
+    const teamMembersStr = tmRows.map(m => m.full_name).join(", ") || "—";
 
-const memberIds = await getTeamUserIds(s.team_id);
-const supervisorId = await getTeamSupervisorId(s.team_id);
-const newDate = date || s.date;
-const newTime = time || s.time;
-const newRoom = room_name || s.room_name;
+    const formattedDate = newDate
+      ? new Date(newDate).toLocaleDateString("en-GB", {
+          weekday: "long", year: "numeric", month: "long", day: "numeric",
+        })
+      : "—";
 
-// REPLACE lines 589–603 with:
+    const scheduleMsg =
+      `📋 Project: ${projectTitle}\n` +
+      `👤 Supervisor: ${supervisorName}\n` +
+      `👥 Team #${s.team_id} — Members: ${teamMembersStr}\n` +
+      `📅 Date: ${formattedDate}\n` +
+      `🕐 Time: ${newTime}\n` +
+      `📍 Room: ${newRoom}`;
 
-// Fetch supervisor name for the message
-const [supervisorRow] = await db.execute(
-  `SELECT CONCAT(u.first_name, ' ', u.last_name) AS full_name
-   FROM users u WHERE u.id = ?`,
-  [supervisorId]
-);
-const supervisorName = supervisorRow[0]?.full_name || "—";
+    // Notify team members
+    const memberIds = await getTeamUserIds(s.team_id);
+    for (const uid of memberIds) {
+      await sendNotification(uid, "info", "New Defense Schedule", scheduleMsg);
+    }
+    // Notify supervisor
+    if (supervisorId) {
+      await sendNotification(supervisorId, "info", "New Defense Schedule", scheduleMsg);
+    }
 
-// Format the date nicely
-const formattedDate = newDate
-  ? new Date(newDate).toLocaleDateString("en-GB", {
-      weekday: "long", year: "numeric", month: "long", day: "numeric",
-    })
-  : newDate;
+    // ✅ NO jury email sent here
 
-const scheduleMsg =
-  `📋 Project: ${projectTitle}\n` +
-  `👤 Supervisor: ${supervisorName}\n` +
-  `👥 Team #${s.team_id} — Members: ${teamMembersStr}\n` +
-  `📅 Date: ${formattedDate}\n` +
-  `🕐 Time: ${newTime}\n` +
-  `📍 Room: ${newRoom}`;
-
-// Notify team members
-for (const uid of memberIds) {
-await sendNotification(uid, "info", "Defense Schedule Updated", scheduleMsg);  
-}
-// Notify supervisor
-if (supervisorId) {
-  await sendNotification(supervisorId, "info", "Defense Schedule Updated", scheduleMsg);
-}
-
-// ADD after line 621 (after the supervisor sendNotification, before res.json):
-
-// Send schedule-update email to each jury member
-const formattedNewDate = newDate
-  ? new Date(newDate).toLocaleDateString("en-GB", {
-      weekday: "long", year: "numeric", month: "long", day: "numeric",
-    })
-  : "—";
-
-for (const member of juryRows) {
-  const roleLabel = member.role === "PRESIDENT" ? "President"
-                  : member.role === "RAPPORTEUR" ? "Rapporteur" : "Examiner";
-  try {
-    await transporter.sendMail({
-      from: `"ESI-SBA PFE Platform" <${process.env.SMTP_USER}>`,
-      to: member.email,
-      subject: `Defense Schedule Updated – ${projectTitle} | ESI-SBA PFE`,
-      html: `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:Arial,sans-serif;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f0f4f8;padding:32px 16px;">
-    <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" width="600"
-             style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-        <tr>
-          <td style="background:linear-gradient(135deg,#193962,#2D8FBF);padding:32px 40px 24px;">
-            <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">⚠️ Defense Schedule Updated</h1>
-            <p style="margin:4px 0 0;color:#c8dff0;font-size:13px;">The defense session has been rescheduled.</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="background:#eaf2fb;padding:12px 40px;border-bottom:1px solid #dce8f3;">
-            <p style="margin:0;font-size:13px;color:#555555;">
-              You are assigned as&nbsp;
-              <span style="background:#193962;color:#fff;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;">${roleLabel}</span>
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:28px 40px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-                   style="background:#f8fafc;border:1px solid #dce8f3;border-radius:8px;margin-bottom:20px;">
-              <tr>
-                <td style="padding:16px 20px;">
-                  <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#2D8FBF;text-transform:uppercase;letter-spacing:1.5px;">Updated Defense Details</p>
-                  <table role="presentation" cellpadding="4" cellspacing="0" width="100%">
-                    <tr><td style="font-size:13px;color:#555;width:120px;">📋 Project</td><td style="font-size:13px;color:#193962;font-weight:600;">${projectTitle}</td></tr>
-                    <tr><td style="font-size:13px;color:#555;">📅 Date</td><td style="font-size:13px;color:#193962;font-weight:600;">${formattedNewDate}</td></tr>
-                    <tr><td style="font-size:13px;color:#555;">🕐 Time</td><td style="font-size:13px;color:#193962;font-weight:600;">${newTime}</td></tr>
-                    <tr><td style="font-size:13px;color:#555;">📍 Room</td><td style="font-size:13px;color:#193962;font-weight:600;">${newRoom}</td></tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-            <p style="font-size:13px;color:#555;padding:12px 16px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;margin:0;">
-              ⚠️ Please note the updated schedule and adjust your availability accordingly.
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="background:#f4f7fb;border-top:1px solid #dce8f3;padding:16px 40px;">
-            <p style="margin:0;font-size:11px;color:#999;">
-              Automated notification from <strong style="color:#193962;">ESI-SBA PFE Platform</strong>. Do not reply.
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`,
-    });
-  } catch (mailErr) {
-    console.error(`Failed to send update email to ${member.email}:`, mailErr.message);
-  }
-}
-
-res.json({ message: "Soutenance updated. Jury and team notified." });
+    res.json({ message: "Defense scheduled. Supervisor and team notified." });
   } catch (err) {
-    console.error("updateSoutenance error:", err);
+    console.error("scheduleSoutenance error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -757,3 +928,175 @@ exports.createSoutenance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 }; 
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  ADD THIS TO soutenanceController.js
+// ──────────────────────────────────────────────────────────────────────────────
+ 
+/**
+ * GET /api/soutenance/my-result
+ * Returns the published soutenance result for the currently logged-in student.
+ * Includes: project title, team members, supervisor, date, room,
+ *           grade_oral, grade_demo, grade_qa, grade_deliverables,
+ *           jury_observations, jury members.
+ */
+exports.getMyResult = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+ 
+  try {
+    const user = await getUserFromToken(token);
+ 
+    // 1. Find the team the student belongs to (accepted membership)
+    const [teamRows] = await db.execute(
+      `SELECT tm.team_id
+       FROM team_member tm
+       WHERE tm.student_id = ? AND tm.status = 'ACCEPTED'
+       LIMIT 1`,
+      [user.id]
+    );
+ 
+    if (!teamRows.length) {
+      return res.status(404).json({ message: "You are not part of any team." });
+    }
+ 
+    const teamId = teamRows[0].team_id;
+ 
+    // 2. Find the soutenance for that team (must be PUBLISHED)
+    const [soutRows] = await db.execute(
+      `SELECT
+         s.id,
+         s.team_id,
+         s.project_id,
+         s.status,
+         s.grade_status,
+         s.date,
+         s.time,
+         s.room_name,
+         s.grade_oral,
+         s.grade_deliverables,
+         s.grade_demo,
+         s.grade_qa,
+         s.jury_observations,
+         COALESCE(p.title, '—') AS project_title,
+         sr.grade              AS final_grade,
+         -- Supervisor name from project
+         (SELECT CONCAT(u2.first_name, ' ', u2.last_name)
+          FROM users u2
+          WHERE u2.id = COALESCE(p.teacher_id, p.external_supervisor_id)
+          LIMIT 1) AS supervisor_name
+       FROM soutenance s
+       LEFT JOIN project p          ON p.id = s.project_id
+       LEFT JOIN soutenance_result sr ON sr.soutenance_id = s.id
+       WHERE s.team_id = ?
+         AND s.grade_status = 'PUBLISHED'
+       LIMIT 1`,
+      [teamId]
+    );
+ 
+    if (!soutRows.length) {
+      // Return the row even if not published yet, so frontend can show "pending"
+      const [pendingRows] = await db.execute(
+        `SELECT s.grade_status, s.team_id
+         FROM soutenance s WHERE s.team_id = ? LIMIT 1`,
+        [teamId]
+      );
+      if (pendingRows.length) {
+        return res.status(200).json({ result: pendingRows[0] }); // grade_status ≠ PUBLISHED
+      }
+      return res.status(404).json({ message: "No defense result found." });
+    }
+ 
+    const sout = soutRows[0];
+ 
+    // 3. Fetch team members
+    const [memberRows] = await db.execute(
+      `SELECT
+         CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+         u.id
+       FROM team_member tm
+       JOIN users u ON u.id = tm.student_id
+       WHERE tm.team_id = ? AND tm.status = 'ACCEPTED'
+       ORDER BY u.first_name`,
+      [teamId]
+    );
+ 
+    const members = memberRows.map(m => ({
+      full_name: m.full_name,
+      is_current_user: m.id === user.id,
+    }));
+ 
+    // 4. Fetch jury members
+    const [juryRows] = await db.execute(
+      `SELECT full_name, role
+       FROM soutenance_jury
+       WHERE soutenance_id = ?
+       ORDER BY FIELD(role, 'PRESIDENT', 'RAPPORTEUR', 'EXAMINER')`,
+      [sout.id]
+    );
+ 
+    // 5. Return assembled result
+    res.json({
+      result: {
+        ...sout,
+        members,
+        jury: juryRows,
+      },
+    });
+  } catch (err) {
+    console.error("getMyResult error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+/**
+ * PATCH /api/soutenance/:id/publish
+ * Super-admin publishes the result → sets grade_status = 'PUBLISHED'
+ * and sends an in-app notification to every team member.
+ */
+exports.publishResult = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+
+  try {
+    const user = await getUserFromToken(token);
+    if (user.role !== "super_admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { id } = req.params;
+
+    // Fetch soutenance
+    const [rows] = await db.execute(
+      `SELECT s.*, COALESCE(p.title, '—') AS project_title
+       FROM soutenance s
+       LEFT JOIN project p ON p.id = s.project_id
+       WHERE s.id = ?`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ message: "Soutenance not found." });
+
+    const s = rows[0];
+
+    // Set grade_status to PUBLISHED
+    await db.execute(
+      `UPDATE soutenance SET grade_status = 'PUBLISHED', updated_at = NOW() WHERE id = ?`,
+      [id]
+    );
+
+    // Notify every accepted team member
+    const memberIds = await getTeamUserIds(s.team_id);
+    for (const uid of memberIds) {
+      await sendNotification(
+        uid,
+        "success",
+        "Your Defense Results Are Published!",
+        `🎓 The results for "${s.project_title}" have been published. Check your Results page now.`
+      );
+    }
+
+    res.json({ message: "Result published and students notified." });
+  } catch (err) {
+    console.error("publishResult error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

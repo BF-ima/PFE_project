@@ -107,11 +107,15 @@ const [gradesStats, setGradesStats] = useState({ pending: 0, noted: 0, published
                        : s.grade_status === "PUBLISHED" ? "Published"
                        : "Pending",
         notes: (s.grade_oral !== null && s.grade_oral !== undefined) ? {
-          oralPresentation:    s.grade_oral,
-          deliverablesQuality: s.grade_deliverables,
-          demoApplication:     s.grade_demo,
-          qaResponses:         s.grade_qa,
-        } : null,
+  oralPresentation:    s.grade_oral,
+  deliverablesQuality: s.grade_deliverables,
+  demoApplication:     s.grade_demo,
+  qaResponses:         s.grade_qa,
+  coefOral:            s.coef_oral,
+  coefDeliverables:    s.coef_deliverables,
+  coefDemo:            s.coef_demo,
+  coefQa:              s.coef_qa,
+} : null,
         juryObservations: s.jury_observations || "",
         finalGrade:       s.final_grade || null,
       }));
@@ -299,22 +303,29 @@ const fetchPendingRequests = async () => {
     if (!rejectedRes.ok) throw new Error(rejectedData.message || "Failed to load REJECTED requests");
 
     const mapRequest = (r) => ({
-      id: r.id,
-      teamId: r.team_id,
-      projectTitle: r.project_title,
-      supervisor: r.teacher_name,
-      requestedDate: new Date(r.requested_at).toLocaleDateString(),
-      deliverables: {
-        finalReport:  r.deliverables?.some(d => d.title === "Final Report"),
-        sourceCode:   r.deliverables?.some(d => d.title === "Source Code Repository"),
-        presentation: r.deliverables?.some(d => d.title === "Defense Presentation"),
-      },
-      meetings: {
-        completed: r.completed_meetings,
-        required: 3,
-        status: r.completed_meetings >= 3 ? "Done" : "In progress",
-      },
-    });
+  id: r.id,
+  teamId: r.team_id,
+  projectTitle: r.project_title,
+  supervisor: r.teacher_name,
+  requestedDate: new Date(r.requested_at).toLocaleDateString(),
+  members: r.members || [],
+  deliverables: {
+    finalReport:  r.deliverables?.some(d => d.title === "Final Report"),
+    sourceCode:   r.deliverables?.some(d => d.title === "Source Code Repository"),
+    presentation: r.deliverables?.some(d => d.title === "Defense Presentation"),
+  },
+  // file_path URLs keyed by deliverable title
+  deliverableUrls: {
+    finalReport:  r.deliverables?.find(d => d.title === "Final Report")?.file_path  || null,
+    sourceCode:   r.deliverables?.find(d => d.title === "Source Code Repository")?.file_path || null,
+    presentation: r.deliverables?.find(d => d.title === "Defense Presentation")?.file_path  || null,
+  },
+  meetings: {
+    completed: r.completed_meetings,
+    required: 3,
+    status: r.completed_meetings >= 3 ? "Done" : "In progress",
+  },
+});
 
     const pendingMapped = pendingData.requests.map(mapRequest);
     setPendingTeams(pendingMapped);
@@ -424,8 +435,11 @@ const handleReject = async (requestId) => {
 
   const handleConfirmAddJuryMember = async (juryData) => {
   const token = localStorage.getItem("token");
-  // selectedTeamId now holds the soutenanceId
-  const soutenanceId = juryData.teamId; 
+  const soutenanceId = juryData.teamId;
+
+  const body = juryData.type === "inviteur"
+    ? { email: juryData.email, inviteur_name: juryData.inviteur_name, role: "INVITEUR" }
+    : { email: juryData.email, role: juryData.role.toUpperCase() };
 
   try {
     const res = await fetch(`http://localhost:3000/api/jury/${soutenanceId}/members`, {
@@ -434,23 +448,21 @@ const handleReject = async (requestId) => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        full_name: juryData.fullName,
-        email: juryData.email,
-        role: juryData.role.toUpperCase(), // backend expects PRESIDENT/RAPPORTEUR/EXAMINER
-      }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Failed to add jury member");
 
-    setIsAddJuryModalOpen(false);
-    setSelectedTeamId(null);
-    fetchApprovedSoutenances(); // refresh the whole list with real DB data
+    // Don't close if it was an inviteur batch (modal handles its own close)
+    if (juryData.type !== "inviteur") {
+      setIsAddJuryModalOpen(false);
+      setSelectedTeamId(null);
+    }
+    fetchApprovedSoutenances();
   } catch (err) {
     alert(`❌ Error: ${err.message}`);
   }
 };
-
   const handleScheduleDefense = (teamId) => {
     setSelectedScheduleTeamId(teamId);
     setIsScheduleModalOpen(true);
@@ -494,25 +506,32 @@ const handleConfirmScheduleDefense = async (scheduleData) => {
       return;
     }
 
-    const res = await fetch(
-      `http://localhost:3000/api/soutenance/${source.soutenanceId}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          date:      scheduleData.date,
-          time:      scheduleData.time,
-          room_name: scheduleData.room,
-        }),
-      }
-    );
+    // NEW — different endpoint based on isEdit flag
+const endpoint = scheduleData.isEdit
+  ? `http://localhost:3000/api/soutenance/${source.soutenanceId}`          // UPDATE → notifies jury too
+  : `http://localhost:3000/api/soutenance/${source.soutenanceId}/schedule`; // ADD → no jury email
+
+const res = await fetch(endpoint, {
+  method: "PUT",
+  headers: {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    date:      scheduleData.date,
+    time:      scheduleData.time,
+    room_name: scheduleData.room,
+  }),
+});
+
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Failed to save schedule");
 
-    alert("✅ Defense scheduled! Supervisor and team notified. Jury notified by email.");
+    alert(
+  scheduleData.isEdit
+    ? "✅ Defense updated! Supervisor, team, and jury notified."
+    : "✅ Defense scheduled! Supervisor and team notified."
+);
 
     // Refresh schedule data from DB so UI reflects real state
     await fetchScheduleData();
@@ -544,12 +563,16 @@ const handleConfirmScheduleDefense = async (scheduleData) => {
         method:  "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          grade_oral:          formData.oralPresentation,
-          grade_deliverables:  formData.deliverablesQuality,
-          grade_demo:          formData.demoApplication,
-          grade_qa:            formData.qaResponses,
-          jury_observations:   formData.juryObservations,
-        }),
+  grade_oral:          formData.oralPresentation,
+  grade_deliverables:  formData.deliverablesQuality,
+  grade_demo:          formData.demoApplication,
+  grade_qa:            formData.qaResponses,
+  coef_oral:           formData.coefOral,
+  coef_deliverables:   formData.coefDeliverables,
+  coef_demo:           formData.coefDemo,
+  coef_qa:             formData.coefQa,
+  jury_observations:   formData.juryObservations,
+}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to save grades");
@@ -653,8 +676,8 @@ const handleConfirmScheduleDefense = async (scheduleData) => {
     switch (role?.toLowerCase()) {
       case "president":
         return "bg-purple-100 text-purple-700 border-purple-300";
-      case "reporter":
-        return "bg-blue-100 text-blue-700 border-blue-300";
+      case "inviteur":
+        return "bg-amber-100 text-amber-700 border-amber-300";
       case "examiner":
         return "bg-gray-100 text-gray-700 border-gray-300";
       default:
@@ -883,47 +906,88 @@ const handleConfirmScheduleDefense = async (scheduleData) => {
                       key={team.id}
                       className="border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow"
                     >
-                      {/* Team Header */}
-                      <div className="mb-6">
-                        <h3 className="text-lg font-semibold text-[#193962] mb-2">
-                          {team.id}
-                        </h3>
-                        <p className="text-gray-600">{team.projectTitle}</p>
-                        <div className="flex items-center gap-4 mt-3 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <User size={16} />
-                            <span>Supervisor: {team.supervisor}</span>
+                     
+                     {/* Team Header */}
+                      <div className="mb-4">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="text-lg font-semibold text-[#193962]">
+                            Team #{team.teamId}
+                          </h3>
+                        </div>
+                        <p className="text-gray-800 font-medium">{team.projectTitle}</p>
+                        <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-600">
+                          <div className="flex items-center gap-1.5">
+                            <User size={15} className="text-[#2D8FBF]" />
+                            <span>Supervisor: <strong>{team.supervisor}</strong></span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar size={16} />
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={15} className="text-[#2D8FBF]" />
                             <span>Requested on {team.requestedDate}</span>
                           </div>
                         </div>
                       </div>
 
+                      {/* Team Members */}
+                      {team.members?.length > 0 && (
+                        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Users size={15} className="text-[#2D8FBF]" />
+                            <span className="text-sm font-semibold text-gray-700">Team Members</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {team.members.map((name, i) => (
+                              <span key={i} className="text-xs bg-white border border-gray-200 text-gray-700 px-2.5 py-1 rounded-full">
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Deliverables Validation */}
-                      <div className="mb-6">
-                        <h4 className="font-semibold text-gray-800 mb-3">
+                      <div className="mb-4">
+                        <h4 className="font-semibold text-gray-800 mb-2 text-sm">
                           Deliverables validation
                         </h4>
-                        <div className="flex gap-6">
+                        <div className="flex flex-wrap gap-3">
                           {team.deliverables.finalReport && (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <CheckCircle size={18} />
-                              <span className="text-sm">Final report</span>
-                            </div>
+                            team.deliverableUrls.finalReport
+                              ? <a href={team.deliverableUrls.finalReport} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:underline transition-colors">
+                                  <CheckCircle size={17} />
+                                  <span className="text-sm font-medium">Final report</span>
+                                  <Eye size={14} className="text-green-500" />
+                                </a>
+                              : <div className="flex items-center gap-2 text-green-600">
+                                  <CheckCircle size={17} />
+                                  <span className="text-sm">Final report</span>
+                                </div>
                           )}
                           {team.deliverables.sourceCode && (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <Code size={18} />
-                              <span className="text-sm">Source code</span>
-                            </div>
+                            team.deliverableUrls.sourceCode
+                              ? <a href={team.deliverableUrls.sourceCode} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:underline transition-colors">
+                                  <Code size={17} />
+                                  <span className="text-sm font-medium">Source code</span>
+                                  <Eye size={14} className="text-green-500" />
+                                </a>
+                              : <div className="flex items-center gap-2 text-green-600">
+                                  <Code size={17} />
+                                  <span className="text-sm">Source code</span>
+                                </div>
                           )}
                           {team.deliverables.presentation && (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <Presentation size={18} />
-                              <span className="text-sm">Presentation</span>
-                            </div>
+                            team.deliverableUrls.presentation
+                              ? <a href={team.deliverableUrls.presentation} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:underline transition-colors">
+                                  <Presentation size={17} />
+                                  <span className="text-sm font-medium">Presentation</span>
+                                  <Eye size={14} className="text-green-500" />
+                                </a>
+                              : <div className="flex items-center gap-2 text-green-600">
+                                  <Presentation size={17} />
+                                  <span className="text-sm">Presentation</span>
+                                </div>
                           )}
                         </div>
                       </div>
@@ -1082,10 +1146,9 @@ const handleConfirmScheduleDefense = async (scheduleData) => {
                             </button>
 {(() => {
   const roles = team.juryMembers.map(m => m.role.toUpperCase());
-  const hasPresident   = roles.filter(r => r === "PRESIDENT").length   === 1;
-  const hasRapporteur  = roles.filter(r => r === "RAPPORTEUR").length  === 1;
-  const hasExaminer    = roles.filter(r => r === "EXAMINER").length    === 1;
-  const canApprove     = hasPresident && hasRapporteur && hasExaminer;
+  const hasPresident   = roles.filter(r => r === "PRESIDENT").length === 1;
+  const hasExaminer    = roles.filter(r => r === "EXAMINER").length  === 1;
+  const canApprove     = hasPresident && hasExaminer;
   return canApprove ? (
     <button
       onClick={() => handleApproveJury(team.id)}
@@ -1099,12 +1162,12 @@ const handleConfirmScheduleDefense = async (scheduleData) => {
 </div>
 {(() => {
   const roles = team.juryMembers.map(m => m.role.toUpperCase());
-  const missing = ["PRESIDENT", "RAPPORTEUR", "EXAMINER"].filter(
-    r => roles.filter(x => x === r).length !== 1
-  );
+  const missing = ["PRESIDENT", "EXAMINER"].filter(
+  r => roles.filter(x => x === r).length !== 1
+);
   return missing.length > 0 ? (
     <p className="text-xs text-orange-600 mt-2 text-center">
-      ⚠️ Required: exactly 1 President, 1 Rapporteur, 1 Examiner. Missing or duplicate: {missing.join(", ")}
+      ⚠️ Required: exactly 1 President and 1 Examiner. Missing or duplicate: {missing.join(", ")}
     </p>
   ) : null;
 })()}

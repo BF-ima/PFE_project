@@ -164,7 +164,7 @@ DROP TABLE IF EXISTS `teacher`;
 CREATE TABLE `teacher` (
   `id` int NOT NULL,
   `grade` varchar(100) DEFAULT NULL,
-  `rank` enum('A','B','C') DEFAULT NULL,
+  `rank` enum('Professeur','Maître_de_conférences_A','Maître_de_conférences_B','Maître_Assistant_A','Maître_Assistant_B') DEFAULT NULL,
   `department` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `teacher_ibfk_1` FOREIGN KEY (`id`) REFERENCES `users` (`id`)
@@ -177,11 +177,11 @@ CREATE TABLE `teacher` (
 LOCK TABLES `teacher` WRITE;
 /*!40000 ALTER TABLE `teacher` DISABLE KEYS */;
 INSERT INTO `teacher` VALUES 
-(4, 'Professeur', 'A', 'Informatique'),
-(5, 'Maitre de Conferences A', 'A', 'Genie Logiciel'),
-(6, 'Maitre Assistant A', 'B', 'Intelligence Artificielle'),
-(7, 'Maitre Assistant B', 'B', 'Reseaux'),
-(8, 'Maitre de Conferences B', 'A', 'Systemes Embarques');
+(4, 'Artificial Intelligence', 'Professeur', 'Informatique'),
+(5, 'Cybersecurity', 'Maître_de_conférences_A', 'Genie Logiciel'),
+(6, 'Web Development', 'Maître_de_conférences_B', 'Intelligence Artificielle'),
+(7, 'Software Engineering', 'Maître_Assistant_A', 'Reseaux'),
+(8, 'Data Science', 'Maître_de_conférences_B', 'Systemes Embarques');
 /*!40000 ALTER TABLE `teacher` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -486,11 +486,6 @@ CREATE TABLE `announcement` (
 
 LOCK TABLES `announcement` WRITE;
 /*!40000 ALTER TABLE `announcement` DISABLE KEYS */;
-INSERT INTO `announcement` VALUES 
-(1, 'Deadline Projets PFE', 'La date limite pour soumettre les projets est le 30 Avril 2026', 'etudiant', 'urgent', 1, '2026-03-01 08:00:00'),
-(2, 'Session de formation IA', 'Atelier sur lintelligence artificielle le 15 Avril', 'All users', 'info', 2, '2026-03-10 09:00:00'),
-(3, 'Nouveaux projets disponibles', 'Plusieurs projets ont ete ajoutes par des entreprises partenaires', 'etudiant', 'normal', 3, '2026-03-15 10:00:00'),
-(4, 'Soutenance publique', 'Les soutenances auront lieu du 1er au 15 Juin 2026', 'super_admin,admin,enseignant', 'info', 1, '2026-03-20 11:00:00');
 /*!40000 ALTER TABLE `announcement` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1075,6 +1070,10 @@ CREATE TABLE `soutenance` (
   `grade_deliverables` decimal(5,2) DEFAULT NULL,
   `grade_demo` decimal(5,2) DEFAULT NULL,
   `grade_qa` decimal(5,2) DEFAULT NULL,
+  `coef_oral`          DECIMAL(4,2) NOT NULL DEFAULT 1 ,
+  `coef_deliverables`  DECIMAL(4,2) NOT NULL DEFAULT 1 ,
+  `coef_demo`          DECIMAL(4,2) NOT NULL DEFAULT 1 ,
+  `coef_qa`            DECIMAL(4,2) NOT NULL DEFAULT 1 ,
   `jury_observations` text DEFAULT NULL,
   `grade_status` enum('PENDING','NOTED','PUBLISHED') NOT NULL DEFAULT 'PENDING',
   `created_by` int DEFAULT NULL,
@@ -1144,13 +1143,17 @@ DROP TABLE IF EXISTS `soutenance_jury`;
 CREATE TABLE IF NOT EXISTS `soutenance_jury` (
   `id`            INT          NOT NULL AUTO_INCREMENT,
   `soutenance_id` INT          NOT NULL,
+  `teacher_id`    INT NULL,
   `full_name`     VARCHAR(150) NOT NULL,
   `email`         VARCHAR(150) NOT NULL,
-  `role`          ENUM('PRESIDENT','RAPPORTEUR','EXAMINER') NOT NULL DEFAULT 'EXAMINER',
+  `role`          ENUM('PRESIDENT','EXAMINER','INVITEUR') NOT NULL DEFAULT 'EXAMINER',
+  `is_inviteur`   TINYINT(1) NOT NULL DEFAULT 0,
   `added_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `soutenance_id` (`soutenance_id`),
-  CONSTRAINT `sj_soutenance_fk` FOREIGN KEY (`soutenance_id`) REFERENCES `soutenance` (`id`) ON DELETE CASCADE
+  kEY `teacher_id` (`teacher_id`),
+  CONSTRAINT `sj_soutenance_fk` FOREIGN KEY (`soutenance_id`) REFERENCES `soutenance` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sj_teacher_fk` FOREIGN KEY (`teacher_id`) REFERENCES `teacher` (`id`) 
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;
 
 --

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar.jsx";
 import { ProfileDropdown } from '../supervisor/HomePage';
@@ -24,49 +24,30 @@ const Announcements = () => {
   // User actuel
   const { currentUser } = useCurrentUser();
 
-  // Données mockées des annonces
-  const [announcements, setAnnouncements] = useState([
-    {
-      id: 1,
-      type: "urgent",
-      title: "System maintenance",
-      description:
-        "The platform will undergo scheduled maintenance on March 25th from 10 PM to 2 AM.",
-      date: "Mar 24, 2026 - 10:15",
-      audience: "All users",
-      icon: AlertTriangle,
-    },
-    {
-      id: 2,
-      type: "info",
-      title: "Project Allocation Results Published",
-      description:
-        "The results of the project allocation have been published. You can now view your assigned project.",
-      date: "Mar 24, 2026 - 10:00",
-      audience: "Students",
-      icon: Info,
-    },
-    {
-      id: 3,
-      type: "alert",
-      title: "New Feature: Team Collaboration Tools",
-      description:
-        "We've added new collaboration tools to help teams work together more effectively.",
-      date: "Mar 23, 2026 - 16:30",
-      audience: "All users",
-      icon: AlertCircle,
-    },
-    {
-      id: 4,
-      type: "reminder",
-      title: "Workshop: Project Management Best Practices",
-      description:
-        "Join us for a workshop on project management best practices scheduled for next week.",
-      date: "Mar 23, 2026 - 14:20",
-      audience: "Students",
-      icon: Clock,
-    },
-  ]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const fetchAnnouncements = async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/announcements", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Erreur serveur");
+    setAnnouncements(data.announcements);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+  fetchAnnouncements();
+}, []);
 
   // Handlers
   const handleLogout = () => {
@@ -91,25 +72,29 @@ const Announcements = () => {
     console.log("✓ Toutes les annonces marquées comme lues");
   };
 
-  const handlePublishAnnouncement = (announcementData) => {
-    const newAnnouncement = {
-      id: announcements.length + 1,
-      type: announcementData.priority,
-      title: announcementData.title,
-      description: announcementData.content,
-      date: new Date().toLocaleString("en-US", {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+  const handlePublishAnnouncement = async (announcementData) => {
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/announcements", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: announcementData.title,
+        description: announcementData.content,
+        type: announcementData.priority,
+        audience: announcementData.audience,
       }),
-      audience: announcementData.audience,
-      icon: getIconForPriority(announcementData.priority),
-    };
-
-    setAnnouncements([newAnnouncement, ...announcements]);
-  };
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Erreur serveur");
+    await fetchAnnouncements(); // refresh list from DB
+  } catch (err) {
+    alert("Erreur: " + err.message);
+  }
+};
 
   const getIconForPriority = (priority) => {
     switch (priority) {
@@ -279,6 +264,12 @@ const Announcements = () => {
 
               {/* Announcements List */}
               <div className="divide-y divide-gray-100">
+                {loading && (
+  <div className="px-6 py-12 text-center text-gray-400">Loading...</div>
+)}
+{error && (
+  <div className="px-6 py-4 text-center text-red-500 text-sm">{error}</div>
+)}
                 {filteredAnnouncements.length === 0 ? (
                   <div className="px-6 py-12 text-center text-gray-500">
                     <Megaphone
@@ -292,8 +283,8 @@ const Announcements = () => {
                   </div>
                 ) : (
                   filteredAnnouncements.map((announcement) => {
-                    const IconComponent = announcement.icon;
                     const typeConfig = getTypeConfig(announcement.type);
+                    const IconComponent = typeConfig.icon;
 
                     return (
                       <div
@@ -319,8 +310,13 @@ const Announcements = () => {
                                   {announcement.description}
                                 </p>
                                 <p className="text-xs text-gray-400 mt-2">
-                                  {announcement.date}
-                                </p>
+  {announcement.created_at
+    ? new Date(announcement.created_at).toLocaleString("en-GB", {
+        day: "2-digit", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : ""}
+</p>
                               </div>
 
                               {/* Badge audience */}

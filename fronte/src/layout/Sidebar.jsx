@@ -13,12 +13,11 @@ export const MENU_ITEMS = [
   { icon: Bell, path: '/admin-notifications', label: 'Notifications' },
   { icon: Building2, path: '/academicentitymanage', label: 'Academic Entity Management' },
   { icon: GraduationCap, path: '/defense-manage', label: 'Defense Management' },
-  { icon: ChartColumn, path: '/statistics', label: 'Statistics' },
 ];
 
   const Sidebar = ({ menuItems = MENU_ITEMS }) => {
   const location = useLocation();
-  const [unreadCount, setUnreadCount] = useState(0);   // ✅ ADD
+  const [unreadCount, setUnreadCount] = useState(0);   
 
   // ✅ ADD — poll unread count every 30s like StudentSidebar
   useEffect(() => {
