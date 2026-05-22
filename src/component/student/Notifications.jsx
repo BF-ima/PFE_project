@@ -6,23 +6,25 @@ import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
   Bell, Info, AlertCircle, Clock,
-  MessageCircle, Trophy, Facebook, Linkedin,
-  Megaphone, UserPlus, Wrench
+  MessageCircle, Trophy, 
+  Megaphone, UserPlus,
 } from "lucide-react";
 import NotificationsPanel from "../../layout/NotificationsPanel";
 import AnnouncementsPanel from "../../layout/AnnouncementsPanel";
 import InvitationsPanel from "../../layout/InvitationsPanel";
 import AnnouncementDetailModal from "../../layout/AnnouncementDetailModal";
+import { getReadIds, markAnnouncementRead } from "../../api/announcements";
 
 const Notifications = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab]               = useState("notifications");
-  const [activeFilter, setActiveFilter]         = useState("all");
-  const [unreadOnly, setUnreadOnly]             = useState(false);
-  const [inviteFilter, setInviteFilter]         = useState("all");
-  const [announcementFilter, setAnnouncementFilter] = useState("all");
-  const [selectedNotification, setSelectedNotification] = useState(null);
-  const [showDetailModal, setShowDetailModal]   = useState(false);
+  const [activeTab,             setActiveTab]             = useState("notifications");
+  const [activeFilter,          setActiveFilter]          = useState("all");
+  const [unreadOnly,            setUnreadOnly]            = useState(false);
+  const [inviteFilter,          setInviteFilter]          = useState("all");
+  const [announcementFilter,    setAnnouncementFilter]    = useState("all");
+  const [selectedNotification,  setSelectedNotification]  = useState(null);
+  const [showDetailModal,       setShowDetailModal]       = useState(false);
+  const [readAnnouncementIds,   setReadAnnouncementIds]   = useState(() => getReadIds());
 
   const { currentUser } = useCurrentUser();
 
@@ -41,7 +43,7 @@ const Notifications = () => {
       fetch("http://localhost:3000/api/invitations",   { headers }).then(r => r.json()),
     ])
       .then(([notifData, announceData, inviteData]) => {
-        setNotifications(notifData.notifications   || []);
+        setNotifications(notifData.notifications    || []);
         setAnnouncements(announceData.announcements || []);
         setInvitations(inviteData.invitations       || []);
       })
@@ -55,9 +57,7 @@ const Notifications = () => {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}` },
     });
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-    );
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
   const handleMarkAsUnread = async (id) => {
@@ -66,9 +66,7 @@ const Notifications = () => {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}` },
     });
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, is_read: false } : n)
-    );
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: false } : n));
   };
 
   const handleMarkAllRead = async () => {
@@ -80,50 +78,10 @@ const Notifications = () => {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 
-const handleAcceptInvite = async (id) => {
-  try {
-    const token = localStorage.getItem("token");
-    const res   = await fetch(`http://localhost:3000/api/invitations/${id}/accept`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      setInvitations(prev =>
-        prev.map(i => i.id === id ? { ...i, status: "ACCEPTED" } : i)
-      );
-      toast.success("You have joined the team!");
-    } else if (res.status === 400 || res.status === 409) {
-      setInvitations(prev =>
-        prev.map(i => i.id === id ? { ...i, status: "REJECTED" } : i)
-      );
-      toast.error(data.message);
-    } else {
-      toast.error(data.message || "An error occurred");
-    }
-  } catch (err) {
-    console.error("acceptInvitation error:", err);
-    toast.error("Network error. Please try again.");
-  }
-};
-
-  const handleDeclineInvite = async (id) => {
-    const token = localStorage.getItem("token");
-    const res   = await fetch(`http://localhost:3000/api/invitations/${id}/decline`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.message); return; }
-    setInvitations(prev =>
-      prev.map(i => i.id === id ? { ...i, status: "REJECTED" } : i)
-    );
-    toast.success("Invitation declined");
-  };
-
-  // ── Announcement modal ────────────────────────────────────────────────────
+  // ── Announcement click — mark as read immediately ─────────────────────────
   const handleAnnouncementClick = (announcement) => {
+    markAnnouncementRead(announcement.id);
+    setReadAnnouncementIds(getReadIds());
     setSelectedNotification(announcement);
     setShowDetailModal(true);
   };
@@ -133,24 +91,45 @@ const handleAcceptInvite = async (id) => {
     setSelectedNotification(null);
   };
 
-  // ── Type config — matches your DB enum: INFO, ALERT, REMINDER ────────────
+  // ── Invitation handlers ───────────────────────────────────────────────────
+  const handleAcceptInvite = async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch(`http://localhost:3000/api/invitations/${id}/accept`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInvitations(prev => prev.map(i => i.id === id ? { ...i, status: "ACCEPTED" } : i));
+        toast.success("You have joined the team!");
+      } else {
+        setInvitations(prev => prev.map(i => i.id === id ? { ...i, status: "REJECTED" } : i));
+        toast.error(data.message);
+      }
+    } catch (err) {
+      toast.error("Network error. Please try again.");
+    }
+  };
+
+  const handleDeclineInvite = async (id) => {
+    const token = localStorage.getItem("token");
+    const res   = await fetch(`http://localhost:3000/api/invitations/${id}/decline`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.message); return; }
+    setInvitations(prev => prev.map(i => i.id === id ? { ...i, status: "REJECTED" } : i));
+    toast.success("Invitation declined");
+  };
+
+  // ── Type config ───────────────────────────────────────────────────────────
   const getTypeConfig = (type) => {
     const configs = {
-      INFO: {
-        icon: Info,
-        color: { bg: "#DBEAFE", text: "#2563EB" },
-        label: "Info",
-      },
-      ALERT: {
-        icon: AlertCircle,
-        color: { bg: "#FEE2E2", text: "#DC2626" },
-        label: "Alert",
-      },
-      REMINDER: {
-        icon: Clock,
-        color: { bg: "#F3E8FF", text: "#9333EA" },
-        label: "Reminder",
-      },
+      INFO:     { icon: Info,         color: { bg: "#DBEAFE", text: "#2563EB" }, label: "Info"     },
+      ALERT:    { icon: AlertCircle,  color: { bg: "#FEE2E2", text: "#DC2626" }, label: "Alert"    },
+      REMINDER: { icon: Clock,        color: { bg: "#F3E8FF", text: "#9333EA" }, label: "Reminder" },
     };
     return configs[type] || configs.INFO;
   };
@@ -162,10 +141,6 @@ const handleAcceptInvite = async (id) => {
     localStorage.removeItem("token");
     sessionStorage.clear();
     navigate("/login");
-  };
-
-  const handleChangePassword = (formData) => {
-    console.log("🔐 Password change:", formData);
   };
 
   return (
@@ -181,18 +156,11 @@ const handleAcceptInvite = async (id) => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v" target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm">
-                <Facebook size={14} className="sm:w-5 sm:h-5" />
-              </a>
-              <a href="https://www.linkedin.com/in/https%3A%2F%2Fwww.linkedin.com%2Fschool%2Fesisba" target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm">
-                <Linkedin size={14} className="sm:w-5 sm:h-5" />
-              </a>
+              
               <ProfileDropdown
                 user={currentUser}
                 onLogout={handleLogout}
-                onChangePassword={handleChangePassword}
+                onChangePassword={() => {}}
               />
             </div>
           </div>
@@ -204,21 +172,41 @@ const handleAcceptInvite = async (id) => {
             {/* Tabs */}
             <div className="flex items-center gap-4 mb-6">
               <button onClick={() => setActiveTab("notifications")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === "notifications" ? "bg-[#1e3a5f] text-white shadow-sm" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}>
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeTab === "notifications" ? "bg-[#1e3a5f] text-white shadow-sm" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}>
                 <Bell size={18} /> Notifications
                 {unreadCount > 0 && (
-                  <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{unreadCount}</span>
+                  <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCount}
+                  </span>
                 )}
               </button>
+
               <button onClick={() => setActiveTab("announcements")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === "announcements" ? "bg-[#1e3a5f] text-white shadow-sm" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}>
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeTab === "announcements" ? "bg-[#1e3a5f] text-white shadow-sm" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}>
                 <Megaphone size={18} /> Announcements
+                {(() => {
+                  const unread = announcements.filter(a => !readAnnouncementIds.has(a.id)).length;
+                  return unread > 0 ? (
+                    <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {unread}
+                    </span>
+                  ) : null;
+                })()}
               </button>
+
               <button onClick={() => setActiveTab("invites")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === "invites" ? "bg-[#1e3a5f] text-white shadow-sm" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}>
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeTab === "invites" ? "bg-[#1e3a5f] text-white shadow-sm" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}>
                 <UserPlus size={18} /> Invites
                 {pendingCount > 0 && (
-                  <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{pendingCount}</span>
+                  <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {pendingCount}
+                  </span>
                 )}
               </button>
             </div>
@@ -244,6 +232,7 @@ const handleAcceptInvite = async (id) => {
                 announcementFilter={announcementFilter}
                 setAnnouncementFilter={setAnnouncementFilter}
                 onAnnouncementClick={handleAnnouncementClick}
+                readAnnouncementIds={readAnnouncementIds}
               />
             )}
             {activeTab === "invites" && (

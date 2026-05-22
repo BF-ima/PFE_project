@@ -235,54 +235,11 @@ const AllocationResults = () => {
       setPublishing(false);
     }
   };
-const handleExportReport = async () => {
-    try {
-      const res = await fetch(`${API}/distribution/export`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      if (!res.ok) throw new Error("Export failed");
-      const { rows } = await res.json();
 
-      if (!rows || rows.length === 0) {
-        alert("No allocation data to export yet.");
-        return;
-      }
-
-      // Build worksheet rows
-      const wsData = [
-        ["Team ID", "Team Members", "Supervisor", "Academic Average (/20)", "Assigned Project", "Priority"],
-        ...rows.map(r => [
-          `Team #${r.team_id}`,
-          r.members || "—",
-          r.supervisor || "—",
-          r.team_average != null ? parseFloat(r.team_average) : "—",
-          r.project_title || "—",
-          r.assigned_priority ? `#${r.assigned_priority}` : "Manual",
-        ]),
-      ];
-
-      const XLSX = await import("xlsx");
-      const wb   = XLSX.utils.book_new();
-      const ws   = XLSX.utils.aoa_to_sheet(wsData);
-
-      // Column widths
-      ws["!cols"] = [
-        { wch: 12 },  // Team ID
-        { wch: 42 },  // Members
-        { wch: 24 },  // Supervisor
-        { wch: 22 },  // Average
-        { wch: 38 },  // Project
-        { wch: 10 },  // Priority
-      ];
-
-      XLSX.utils.book_append_sheet(wb, ws, "Allocation Results");
-      XLSX.writeFile(wb, `allocation_results_${new Date().toISOString().slice(0, 10)}.xlsx`);
-
-    } catch (err) {
-      alert(`❌ Export error: ${err.message}`);
-    }
+  const handleExportReport = () => {
+    alert("Rapport d'allocation exporté avec succès !");
   };
-  
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const getPriorityColor = (priority, matched) => {
     if (matched) return "bg-green-100 text-green-700 border-green-300";

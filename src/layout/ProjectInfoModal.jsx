@@ -34,7 +34,6 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
     fetchProject();
   }, [isOpen, project?.id]);
 
-  // Reset when closed
   useEffect(() => {
     if (!isOpen) {
       setFullProject(null);
@@ -46,14 +45,8 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB') : 'N/A';
 
-  const supervisorName  = fullProject?.teacher_name
-    || fullProject?.external_supervisor_name  || 'N/A';
-  const supervisorEmail = fullProject?.teacher_email
-    || fullProject?.external_supervisor_email || 'N/A';
-  const supervisorPhone = fullProject?.teacher_phone
-    || fullProject?.external_supervisor_phone || 'N/A';
-  const supervisorType  = fullProject?.teacher_id
-    ? 'Internal Supervisor' : 'External Supervisor';
+  const hasTeacher  = !!fullProject?.teacher_id;
+  const hasExternal = !!fullProject?.external_supervisor_id;
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -69,7 +62,6 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
           <button
             onClick={onClose}
             className="absolute left-4 text-white hover:text-gray-200 transition-colors p-2 hover:bg-white/20 rounded-full"
-            title="Retour"
           >
             <ArrowLeft size={20} />
           </button>
@@ -77,7 +69,6 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
           <button
             onClick={onClose}
             className="absolute right-4 text-white hover:text-gray-200 transition-colors p-2 hover:bg-white/20 rounded-full"
-            title="Fermer"
           >
             <X size={20} />
           </button>
@@ -86,21 +77,18 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
         {/* Body */}
         <div className="p-6">
 
-          {/* Loading */}
           {loading && (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-4 border-[#2D8FBF] border-t-transparent rounded-full animate-spin" />
             </div>
           )}
 
-          {/* Error */}
           {error && !loading && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
             </div>
           )}
 
-          {/* Content */}
           {!loading && !error && fullProject && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -120,7 +108,9 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
                   </div>
                   <div>
                     <p className="text-xs font-medium text-gray-500">Speciality</p>
-                    <p className="text-sm text-gray-900 mt-1 font-medium">{fullProject.speciality_name}</p>
+                    <p className="text-sm text-gray-900 mt-1 font-medium">
+                      {fullProject.speciality_name || 'N/A'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs font-medium text-gray-500">Max Teams</p>
@@ -144,7 +134,7 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
                 <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
                   <h3 className="text-base font-medium text-gray-800 text-center">Details</h3>
                 </div>
-                <div className="p-5 space-y-5 overflow-y-auto max-h-64">
+                <div className="p-5 space-y-5 overflow-y-auto max-h-72">
 
                   {/* Description */}
                   <div>
@@ -154,17 +144,53 @@ const ProjectInfoModal = ({ isOpen, onClose, project, getStateColor, getStateTex
                     </p>
                   </div>
 
-                  {/* Supervisor */}
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-2">
-                      Supervisor — {supervisorType}
-                    </p>
-                    <div className="space-y-1">
-                      <p className="text-sm text-gray-700 font-medium">{supervisorName}</p>
-                      <p className="text-xs text-gray-500">{supervisorEmail}</p>
-                      <p className="text-xs text-gray-500">{supervisorPhone}</p>
+                  {/* Internal Supervisor (teacher) */}
+                  {hasTeacher && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-2">
+                        Internal Supervisor
+                      </p>
+                      <div className="space-y-1">
+                        <p className="text-sm text-gray-700 font-medium">
+                          {fullProject.teacher_name || 'N/A'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {fullProject.teacher_email || 'N/A'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {fullProject.teacher_phone || 'N/A'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* External Supervisor */}
+                  {hasExternal && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-2">
+                        External Supervisor
+                      </p>
+                      <div className="space-y-1">
+                        <p className="text-sm text-gray-700 font-medium">
+                          {fullProject.external_supervisor_name || 'N/A'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {fullProject.external_supervisor_email || 'N/A'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {fullProject.external_supervisor_phone || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fallback if somehow neither exists */}
+                  {!hasTeacher && !hasExternal && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-2">Supervisor</p>
+                      <p className="text-sm text-gray-500 italic">No supervisor assigned</p>
+                    </div>
+                  )}
 
                 </div>
               </div>

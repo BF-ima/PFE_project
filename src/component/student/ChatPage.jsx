@@ -4,13 +4,13 @@ import StudentSidebar from '../../layout/StudentSidebar';
 import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
-  Facebook, Linkedin, Search, Paperclip, Send,
+   Search, Paperclip, Send,
   CheckCheck, Loader2, Users, GraduationCap,
 } from 'lucide-react';
 
 // ── Base URL ───────────────────────────────────────────────────────────────
 const BASE       = 'http://localhost:3000/api/messages';
-const SERVER_URL = 'http://localhost:3000'; // prefix for uploaded file URLs
+const SERVER_URL = 'http://localhost:3000';
 
 // ── Auth header ────────────────────────────────────────────────────────────
 const authHeader = () => ({
@@ -42,11 +42,16 @@ const formatTime = (str) => {
   return new Date(str).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-// Resolve file URL — /uploads/... needs server prefix, blob: used as-is
 const resolveUrl = (url) => {
   if (!url) return '';
-  if (url.startsWith('blob:')) return url;   // optimistic preview
-  return url;                                 // already full https:// from Cloudinary
+  if (url.startsWith('blob:')) return url;
+  return url;
+};
+
+// ── Helper: dispatch total unread to sidebar ───────────────────────────────
+const dispatchChatUnread = (convs) => {
+  const total = convs.reduce((sum, c) => sum + (c.unread || 0), 0);
+  window.dispatchEvent(new CustomEvent('chat-unread', { detail: total }));
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -77,12 +82,17 @@ const GroupIcon = ({ groupType, size = 16 }) => (
   </div>
 );
 
-const GroupBadge = ({ groupType }) =>
+const GroupBadge = ({ groupType, supervisorRole }) =>
   groupType === 'team_supervisor' ? (
-    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">
-      <GraduationCap size={9} /> Supervisor included
-
-    </span>
+    supervisorRole === 'entreprise' ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded-full">
+        <GraduationCap size={9} /> External Supervisor
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">
+        <GraduationCap size={9} /> Supervisor included
+      </span>
+    )
   ) : (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-500 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
       <Users size={9} /> team only
@@ -138,46 +148,44 @@ const MessageContent = ({ msg, isMe }) => {
   }
 
   if (msg.file_type === 'file') {
-  const url = resolveUrl(msg.content);
-  const ext = (msg.file_name || '').split('.').pop().toUpperCase();
-  
-  // ✅ Proxy through your backend to force correct filename
-  const downloadUrl = `http://localhost:3000/api/messages/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(msg.file_name || 'fichier')}`;
+    const url = resolveUrl(msg.content);
+    const ext = (msg.file_name || '').split('.').pop().toUpperCase();
+    const downloadUrl = `http://localhost:3000/api/messages/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(msg.file_name || 'fichier')}`;
 
-  return (
-    <a
-      href={downloadUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-3 p-2 rounded-lg no-underline"
-      style={{
-        background: isMe ? 'rgba(255,255,255,0.15)' : '#F3F4F6',
-        minWidth: 180,
-      }}
-    >
-      <div
-        className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
-        style={{ background: ext === 'PDF' ? '#e53e3e' : ext === 'DOCX' || ext === 'DOC' ? '#2b6cb0' : '#718096' }}
+    return (
+      <a
+        href={downloadUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 p-2 rounded-lg no-underline"
+        style={{
+          background: isMe ? 'rgba(255,255,255,0.15)' : '#F3F4F6',
+          minWidth: 180,
+        }}
       >
-        {ext}
-      </div>
-      <div className="flex flex-col min-w-0">
-        <span
-          className="text-sm font-medium truncate"
-          style={{ color: isMe ? '#fff' : '#1F2937', maxWidth: 140 }}
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+          style={{ background: ext === 'PDF' ? '#e53e3e' : ext === 'DOCX' || ext === 'DOC' ? '#2b6cb0' : '#718096' }}
         >
-          {msg.file_name || 'Fichier'}
-        </span>
-        <span
-          className="text-xs"
-          style={{ color: isMe ? 'rgba(255,255,255,0.7)' : '#6B7280' }}
-        >
-          Appuyer pour télécharger
-        </span>
-      </div>
-    </a>
-  );
-}
+          {ext}
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span
+            className="text-sm font-medium truncate"
+            style={{ color: isMe ? '#fff' : '#1F2937', maxWidth: 140 }}
+          >
+            {msg.file_name || 'Fichier'}
+          </span>
+          <span
+            className="text-xs"
+            style={{ color: isMe ? 'rgba(255,255,255,0.7)' : '#6B7280' }}
+          >
+            Appuyer pour télécharger
+          </span>
+        </div>
+      </a>
+    );
+  }
 
   return <span className="text-sm leading-relaxed">{msg.content}</span>;
 };
@@ -213,6 +221,8 @@ const ChatPage = () => {
         if (cancelled) return;
         const convs = data.conversations || [];
         setConversations(convs);
+        // ── dispatch unread count to sidebar ──
+        dispatchChatUnread(convs);
         if (convs.length > 0) setActiveId(convs[0].id);
       })
       .catch((err) => {
@@ -231,9 +241,14 @@ const ChatPage = () => {
     api.fetchMessages(convId)
       .then((data) => {
         setMessages(data.messages || []);
-        setConversations((prev) =>
-          prev.map((c) => c.id === convId ? { ...c, unread: 0 } : c)
-        );
+        setConversations((prev) => {
+          const updated = prev.map((c) =>
+            c.id === convId ? { ...c, unread: 0 } : c
+          );
+          // ── dispatch updated unread count to sidebar ──
+          dispatchChatUnread(updated);
+          return updated;
+        });
       })
       .catch((err) => {
         if (!silent) setError(err.message || 'Impossible de charger les messages.');
@@ -267,6 +282,14 @@ const ChatPage = () => {
     setMessages([]);
     setActiveId(convId);
     api.markAsRead(convId).catch(() => {});
+    // ── zero out this conv's badge immediately in sidebar ──
+    setConversations((prev) => {
+      const updated = prev.map((c) =>
+        c.id === convId ? { ...c, unread: 0 } : c
+      );
+      dispatchChatUnread(updated);
+      return updated;
+    });
   };
 
   const handleSend = async () => {
@@ -308,7 +331,6 @@ const ChatPage = () => {
       const tempId  = `local-${Date.now()}-${Math.random()}`;
       const tempUrl = URL.createObjectURL(file);
 
-      // 1. Optimistic preview
       setMessages((prev) => [...prev, {
         id:          tempId,
         sender_id:   currentUser?.id,
@@ -321,7 +343,6 @@ const ChatPage = () => {
         _uploading:  true,
       }]);
 
-      // 2. Upload — do NOT set Content-Type, browser adds correct multipart boundary
       try {
         const formData = new FormData();
         formData.append('file', file);
@@ -336,12 +357,10 @@ const ChatPage = () => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.message || "Échec de l'envoi du fichier.");
 
-        // 3. Replace temp preview with confirmed server message
         setMessages((prev) =>
           prev.map((m) => m.id === tempId ? { ...data.message } : m)
         );
 
-        // 4. Update conversation preview in sidebar
         setConversations((prev) =>
           prev.map((c) =>
             c.id === activeId
@@ -382,20 +401,7 @@ const ChatPage = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a
-                href="https://www.facebook.com/esisba.edu"
-                target="_blank" rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm"
-              >
-                <Facebook size={14} />
-              </a>
-              <a
-                href="https://www.linkedin.com/school/esisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm"
-              >
-                <Linkedin size={14} />
-              </a>
+              
               <ProfileDropdown
                 user={currentUser}
                 onLogout={handleLogout}
@@ -462,14 +468,14 @@ const ChatPage = () => {
                             <span className="text-sm font-semibold text-gray-900 truncate">{conv.name}</span>
                             <span className="text-xs text-gray-400 shrink-0 ml-1">{formatTime(conv.time)}</span>
                           </div>
-                          <GroupBadge groupType={conv.group_type} />
+                          <GroupBadge groupType={conv.group_type} supervisorRole={conv.supervisorRole} />
                           <p className="text-xs text-gray-400 truncate mt-1">
                             {conv.lastMessage || 'No message'}
                           </p>
                         </div>
                         {conv.unread > 0 && (
-                          <span className="shrink-0 w-5 h-5 rounded-full bg-[#2D8FBF] text-white text-xs flex items-center justify-center font-medium mt-1">
-                            {conv.unread}
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-medium mt-1">
+                            {conv.unread > 99 ? '99+' : conv.unread}
                           </span>
                         )}
                       </div>
@@ -515,12 +521,11 @@ const ChatPage = () => {
                       ) : messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-gray-300">
                           <Users size={40} className="mb-2" />
-                          <p className="text-xs text-gray-400">Be the first to write in this group! !</p>
+                          <p className="text-xs text-gray-400">Be the first to write in this group!</p>
                         </div>
                       ) : (
                         messages.map((msg) => {
                           const isMe = msg.sender_id === currentUser?.id;
-
                           return (
                             <div
                               key={msg.id}
@@ -534,7 +539,6 @@ const ChatPage = () => {
                                     {msg.sender_name}
                                   </span>
                                 )}
-
                                 <div
                                   className="px-4 py-2.5 rounded-2xl overflow-hidden"
                                   style={isMe
@@ -544,7 +548,6 @@ const ChatPage = () => {
                                 >
                                   <MessageContent msg={msg} isMe={isMe} />
                                 </div>
-
                                 <div className="flex items-center gap-1 mt-1">
                                   <span className="text-xs text-gray-400">{formatTime(msg.created_at)}</span>
                                   {isMe && msg.is_read === 1 && (

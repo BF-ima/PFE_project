@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { Search, Facebook, Linkedin, User, Calendar, Lock, LogOut as LogoutIcon, X } from 'lucide-react';
+import { Search, User, Calendar, Lock, LogOut as LogoutIcon, X } from 'lucide-react';
 import { Pagination } from '../Dashboard';
 import ProjectInfoModal from '../../layout/ProjectInfoModal';
 import { useNavigate } from 'react-router-dom';
@@ -299,20 +299,7 @@ function HomePage() {
                 />
               </div>
 
-              <a href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v"
-                target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="Facebook">
-                <Facebook size={14} className="sm:w-5 sm:h-5" />
-              </a>
-
-              <a href="https://www.linkedin.com/school/esisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="LinkedIn">
-                <Linkedin size={14} className="sm:w-5 sm:h-5" />
-              </a>
-
+              
               <ProfileDropdown
                 user={currentUser}
                 onLogout={handleLogout}

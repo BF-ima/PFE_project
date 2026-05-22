@@ -1,11 +1,11 @@
-// src/component/supervisor/ChatPage.jsx
+// src/component/externalsupervisor/ChatPage.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { ProfileDropdown } from './HomePage';
+import SupervisorSidebar from '../../layout/ExternalSupervisorSidebar';
+import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
-   Search, Paperclip, Send,
+ Search, Paperclip, Send,
   CheckCheck, Loader2, Users, GraduationCap,
 } from 'lucide-react';
 

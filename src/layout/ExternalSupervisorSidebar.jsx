@@ -1,18 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import logo from "../assets/logo.jpg"
-import { fetchAnnouncements, getUnreadCount } from './../api/announcements';
-import {
-  LayoutGrid, UsersRound, Star, MessageCircle, Bell, Folder, Calendar
-} from 'lucide-react';
+import { UsersRound, MessageCircle, Bell, Folder, Calendar } from 'lucide-react';
 
-const StudentSidebar = () => {
+const ExternalSupervisorSidebar = () => {
   const location = useLocation();
   const [unreadCount,     setUnreadCount]     = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  const [announcementUnread, setAnnouncementUnread] = useState(0);
 
-  // ── Notifications polling ─────────────────────────────────────────────
   useEffect(() => {
     const fetchUnread = async () => {
       try {
@@ -22,18 +17,13 @@ const StudentSidebar = () => {
         if (!res.ok) return;
         const data = await res.json();
         setUnreadCount(data.unread_count || 0);
-      } catch {
-        // silently fail
-      }
+      } catch {}
     };
-
-
     fetchUnread();
     const interval = setInterval(fetchUnread, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // ── Chat unread polling (every 10s, always, from any page) ───────────
   useEffect(() => {
     const fetchChatUnread = async () => {
       try {
@@ -45,36 +35,19 @@ const StudentSidebar = () => {
         const convs = data.conversations || [];
         const total = convs.reduce((sum, c) => sum + (Number(c.unread) || 0), 0);
         setChatUnreadCount(total);
-      } catch {
-        // silently fail
-      }
+      } catch {}
     };
-
     fetchChatUnread();
     const interval = setInterval(fetchChatUnread, 10000);
     return () => clearInterval(interval);
   }, []);
 
-    useEffect(() => {
-  const fetchAnnouncementUnread = async () => {
-    try {
-      const announcements = await fetchAnnouncements();
-      setAnnouncementUnread(getUnreadCount(announcements));
-    } catch {console.log('err')}
-  };
-  fetchAnnouncementUnread();
-  const interval = setInterval(fetchAnnouncementUnread, 60000);
-  return () => clearInterval(interval);
-}, []);
-
   const menuItems = [
-    { icon: LayoutGrid,    path: '/student/firstpage',          label: 'Dashboard' },
-    { icon: UsersRound,    path: '/student/TeamManagementPage', label: 'Team Management' },
-    { icon: Star,          path: '/student/preferencelist',     label: 'Preference List' },
-    { icon: MessageCircle, path: '/student/chatpage',           label: 'Chat',                    badge: chatUnreadCount },
-{ icon: Bell, path: '/student/notifications', label: 'Notifications', badge: unreadCount + announcementUnread },
-    { icon: Folder,        path: '/student/documents',          label: 'Documents & Resources' },
-    { icon: Calendar,      path: '/student/meetings',           label: 'Meeting Management' },
+    { icon: UsersRound,    path: '/external_supervisor/teamspage',    label: 'My Teams' },
+    { icon: MessageCircle, path: '/external_supervisor/chatpage',      label: 'Chat',            badge: chatUnreadCount },
+    { icon: Bell,          path: '/external_supervisor/notifications', label: 'Notifications',   badge: unreadCount     },
+    { icon: Folder,        path: '/external_supervisor/documentpage',  label: 'Documents & Resources' },
+    { icon: Calendar,      path: '/external_supervisor/meeting',       label: 'Meeting Management' },
   ];
 
   return (
@@ -82,8 +55,6 @@ const StudentSidebar = () => {
         <div className="flex items-center justify-center w-full h-12 px-1">
         <img src={logo} alt="Logo" className="object-contain w-full h-auto" />
       </div>
-      
-
       {menuItems.map((item, index) => (
         <Link
           key={index}
@@ -107,4 +78,4 @@ const StudentSidebar = () => {
   );
 };
 
-export default StudentSidebar;
+export default ExternalSupervisorSidebar;

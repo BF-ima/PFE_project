@@ -1,40 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { TriangleAlert } from 'lucide-react';
-import toast from 'react-hot-toast';
 
-const DisbandConfirmModal = ({ isOpen, onClose, onConfirm, teamId }) => {
-  const [loading, setLoading] = useState(false);
-
+const DisbandConfirmModal = ({ isOpen, onClose, onConfirm, disbanding }) => {
   if (!isOpen) return null;
-
-  const handleConfirm = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-
-      const res = await fetch(`http://localhost:3000/api/teams/${teamId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Erreur lors de la suppression de l'équipe");
-      }
-
-      toast.success("Team disbanded successfully");
-      onConfirm(); // triggers handleDisbandTeam in parent
-      onClose();
-
-    } catch (err) {
-      toast.error(err.message || "Error disbanding team");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -58,17 +26,25 @@ const DisbandConfirmModal = ({ isOpen, onClose, onConfirm, teamId }) => {
         <div className="flex justify-end gap-4 px-8 pb-8">
           <button
             onClick={onClose}
-            disabled={loading}
+            disabled={disbanding}
             className="px-8 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            onClick={handleConfirm}
-            disabled={loading}
+            onClick={onConfirm}
+            disabled={disbanding}
             className="px-8 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium disabled:opacity-70"
           >
-            {loading ? "Disbanding..." : "Disband"}
+            {disbanding ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                Disbanding...
+              </span>
+            ) : "Disband"}
           </button>
         </div>
       </div>

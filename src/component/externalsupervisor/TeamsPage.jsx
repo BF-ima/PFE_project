@@ -1,10 +1,9 @@
-// src/component/supervisor/TeamsPage.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ProfileDropdown } from './HomePage';
-import SupervisorSidebar from '../../layout/SupervisorSidebar';
+import { ProfileDropdown } from '../supervisor/HomePage';
+import SupervisorSidebar from '../../layout/ExternalSupervisorSidebar';
 import {
-  Search, MoreVertical,
+  Search,  MoreVertical,
   Eye, Loader2, Users, GraduationCap, X,
 } from 'lucide-react';
 import useCurrentUser from '../../hooks/useCurrentUser';
@@ -210,7 +209,7 @@ function TeamsPage() {
                   className="pl-10 pr-4 py-2.5 w-72 text-sm border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#1e3a5f] bg-gray-50"
                 />
               </div>
-            
+              
               <ProfileDropdown user={currentUser} onLogout={handleLogout} />
             </div>
           </div>

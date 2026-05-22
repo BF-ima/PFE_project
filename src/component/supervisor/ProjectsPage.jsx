@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { Search, Plus, MoreVertical, Eye, Edit2, Trash2, Facebook, Linkedin, X } from 'lucide-react';
+import { Search, Plus, MoreVertical, Eye, Edit2, Trash2, X } from 'lucide-react';
 import ProjectInfoModal from '../../layout/ProjectInfoModal';
 import { useNavigate } from 'react-router-dom';
 import { ProfileDropdown } from './HomePage';
@@ -190,19 +190,7 @@ const { currentUser } = useCurrentUser();
                 />
               </div>
 
-              <a href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v"
-                target="_blank" rel="noopener noreferrer"
-                className="w-8 h-8 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="Facebook">
-                <Facebook size={18} />
-              </a>
-
-              <a href="https://www.linkedin.com/school/esisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-8 h-8 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="LinkedIn">
-                <Linkedin size={18} />
-              </a>
+              
 
               <ProfileDropdown
                 user={currentUser}

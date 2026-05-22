@@ -10,7 +10,6 @@ const CreateAnnouncementModal = ({ isOpen, onClose, onSubmit }) => {
       all: false,
       students: false,
       supervisors: false,
-      admins: false,
     },
   });
 
@@ -49,7 +48,7 @@ const CreateAnnouncementModal = ({ isOpen, onClose, onSubmit }) => {
     if (formData.audience.all) selectedAudience.push("All users");
     if (formData.audience.students) selectedAudience.push("Students");
     if (formData.audience.supervisors) selectedAudience.push("Supervisors");
-    if (formData.audience.admins) selectedAudience.push("Admins");
+
 
     const announcementData = {
       title: formData.title,
@@ -72,7 +71,7 @@ const CreateAnnouncementModal = ({ isOpen, onClose, onSubmit }) => {
         all: false,
         students: false,
         supervisors: false,
-        admins: false,
+    
       },
     });
     onClose();
@@ -203,15 +202,7 @@ const CreateAnnouncementModal = ({ isOpen, onClose, onSubmit }) => {
                 />
                 <span className="text-sm text-gray-700">Supervisors</span>
               </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.audience.admins}
-                  onChange={() => handleAudienceChange("admins")}
-                  className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                />
-                <span className="text-sm text-gray-700">Admins</span>
-              </label>
+              
             </div>
           </div>
         </div>

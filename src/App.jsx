@@ -31,10 +31,17 @@ import SupervisorChatPage from './component/supervisor/ChatPage';
 import SupervisorNotifications from './component/supervisor/Notifications';
 import DocumentsPage from './component/student/DocumentsPage';
 import SupervisorDocumentsPage from './component/supervisor/DocumentsPage';
+import DeliverableDocumentPage from './component/supervisor/SupervisorDeadlinesPage.jsx';
 import MeetingManagement from './component/supervisor/MeetingManagement';
 import StudentMeetingPage from './component/student/StudentMeetingPage';
-import ResultPage from "./component/student/ResultPage";   
 
+
+
+import ExChatPage from './component/externalsupervisor/ChatPage'
+import ExMeetingPage from './component/externalsupervisor/MeetingManagement'
+import ExDocumentPage from './component/externalsupervisor/DocumentsPage'
+import ExNotifications from './component/externalsupervisor/Notifications'
+import ExTeamsPage from './component/externalsupervisor/TeamsPage'
 
 
 
@@ -66,7 +73,6 @@ function App() {
         <Route index path='/allocationresults' element={<AllocationResults />} /> {/*Admin session */}
         <Route index path='/teams-list' element={<TeamsList />} /> {/*Admin session */}
         <Route index path='/admin-notifications' element={<AdminNotifications />} /> {/*Admin session */}
-        <Route index path='/notifications' element={<AdminNotifications />} />
         <Route index path='/messaging' element={<Messaging />} /> {/*Admin session */}
         <Route index path='/announcements' element={<Announcements />} /> {/*Admin session */}
         <Route index path='/defense-manage' element={<DefenseManagement />} /> {/*Admin session */}
@@ -76,8 +82,19 @@ function App() {
         <Route path='student/documents' element={<DocumentsPage />} />
         <Route path='supervisor/documents' element={<SupervisorDocumentsPage />} />
         <Route path='supervisor/meetings' element={<MeetingManagement />} />
+        <Route path='supervisor/deadlines' element={<DeliverableDocumentPage />} />
         <Route path='student/meetings' element={<StudentMeetingPage />} />
-        <Route path="/student/results" element={<ResultPage />} />
+
+
+
+        <Route index path='external_supervisor/chatpage' element={<ExChatPage />} />
+        <Route index path='external_supervisor/meeting' element={<ExMeetingPage />} />
+        <Route index path='external_supervisor/documentpage' element={<ExDocumentPage />} />
+        <Route index path='external_supervisor/notifications' element={<ExNotifications />} />
+        <Route index path='external_supervisor/teamspage' element={<ExTeamsPage />} />
+
+
+    
       </Routes>
     </>
   )

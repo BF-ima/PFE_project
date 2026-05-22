@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { ProfileDropdown } from './HomePage';
+import SupervisorSidebar from '../../layout/ExternalSupervisorSidebar';
+import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
    Calendar, Users, CheckCircle, Clock,
@@ -141,13 +141,10 @@ const MeetingModal = ({ meeting, onClose, onSave }) => {
           {type === 'in-person' ? (
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: '#193962' }}>Place</label>
-              <select value={location} onChange={e => setLocation(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-2 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] text-sm">
-                <option value="" disabled>Select a room</option>
-                {['Salle 1','Salle 2','Salle 3','Amphi A','Amphi B','Salle de réunion'].map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
+              <input value={location} onChange={e => setLocation(e.target.value)}
+                placeholder="Enter the room ..."
+                className="w-full border border-gray-300 rounded-lg p-2 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] text-sm">  
+              </input>
             </div>
           ) : (
             <div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Edit2, Trash2 } from "lucide-react";
+import { Search, Plus, Edit2 } from "lucide-react";
 
 const CohortsTab = () => {
   const [cohorts, setCohorts] = useState([]);
@@ -15,72 +15,50 @@ const CohortsTab = () => {
     status: "active",
   });
   const [editingId, setEditingId] = useState(null);
-  const [openModalId, setOpenModalId] = useState(null);   
-  const [newEndDate, setNewEndDate]   = useState("");      
 
   useEffect(() => {
     fetchCohorts();
   }, []);
 
   const fetchCohorts = async () => {
-    setLoading(true);                                         
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3000/api/promos", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to fetch");
-      const normalized = data.map(p => ({
-        _id:          p.id,
-        name:         p.name,
-        year:         p.year,
-        startDate:    p.start_date,
-        endDate:      p.end_date,
-        studentCount: p.student_count ?? 0,
-        // compute status from end_date vs today
-        status: new Date(p.end_date) < new Date() ? "closed" : "active",
-      }));
-      setCohorts(normalized);
+      // Données mockées
+      const mockData = [
+        {
+          _id: "1",
+          name: "Engineering 2025-2026",
+          year: "2025-2026",
+          startDate: "2025-09-01",
+          endDate: "2026-06-30",
+          status: "active",
+          studentCount: 168,
+        },
+        {
+          _id: "2",
+          name: "Engineering 2024-2025",
+          year: "2024-2025",
+          startDate: "2024-09-01",
+          endDate: "2025-06-30",
+          status: "closed",
+          studentCount: 155,
+        },
+      ];
+
+      setCohorts(mockData);
+      setLoading(false);
     } catch (err) {
-      console.error("fetchCohorts error:", err);
+      console.error("Error:", err);
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
 
-const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const token = localStorage.getItem("token");
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
-    try {
-      const url    = editingId
-        ? `http://localhost:3000/api/promos/${editingId}`
-        : `http://localhost:3000/api/promos`;
-      const method = editingId ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify({
-          name:       formData.name,
-          year:       formData.year,
-          start_date: formData.startDate,
-          end_date:   formData.endDate,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to save");
-      await fetchCohorts();
-      setShowModal(false);
-      resetForm();
-    } catch (err) {
-      console.error("Error saving:", err);
-      alert(`❌ ${err.message}`);
-    }
+    alert("Fonctionnalité à connecter au backend");
+    fetchCohorts();
+    setShowModal(false);
+    resetForm();
   };
 
   const handleEdit = (cohort) => {
@@ -95,45 +73,12 @@ const handleSubmit = async (e) => {
     setShowModal(true);
   };
 
- const handleCloseCohort = async (id) => {
-    if (!window.confirm("Are you sure you want to close this cohort?")) return;
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(`http://localhost:3000/api/promos/${id}/close`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to close");
-      await fetchCohorts();
-    } catch (err) {
-      console.error("Error closing:", err);
-      alert(`❌ ${err.message}`);
+  const handleCloseCohort = (id) => {
+    if (window.confirm("Êtes-vous sûr de vouloir clôturer cette promotion ?")) {
+      alert("Fonctionnalité à connecter au backend");
+      fetchCohorts();
     }
   };
-
-  const handleOpenCohort = async () => {
-  if (!newEndDate) return alert("Please select a new end date");
-  const token = localStorage.getItem("token");
-  try {
-    const res = await fetch(`http://localhost:3000/api/promos/${openModalId}/open`, {
-      method:  "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ end_date: newEndDate }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Failed to reopen");
-    setOpenModalId(null);
-    setNewEndDate("");
-    await fetchCohorts();
-  } catch (err) {
-    console.error("Error reopening:", err);
-    alert(`❌ ${err.message}`);
-  }
-};
 
   const resetForm = () => {
     setFormData({
@@ -169,7 +114,7 @@ const handleSubmit = async (e) => {
   const filteredCohorts = cohorts.filter(
     (cohort) =>
       cohort.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(cohort.year ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+      cohort.year?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -317,14 +262,6 @@ const handleSubmit = async (e) => {
                             Close
                           </button>
                         )}
-                        {cohort.status === "closed" && (
-  <button
-    onClick={() => { setOpenModalId(cohort._id); setNewEndDate(""); }}
-    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors text-sm font-medium"
-  >
-    Open
-  </button>
-)}
                       </div>
                     </td>
                   </tr>
@@ -334,44 +271,6 @@ const handleSubmit = async (e) => {
           </table>
         </div>
       </div>
-
-      {openModalId && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-2xl w-full max-w-sm">
-      <div className="bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white px-6 py-4 flex items-center justify-between rounded-t-2xl">
-        <h3 className="text-lg font-semibold">Reopen Cohort</h3>
-        <button onClick={() => setOpenModalId(null)} className="text-white hover:text-gray-200">×</button>
-      </div>
-      <div className="p-6 space-y-4">
-        <p className="text-sm text-gray-600">Set a new end date to reopen this cohort:</p>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">New End Date *</label>
-          <input
-            type="date"
-            value={newEndDate}
-            onChange={(e) => setNewEndDate(e.target.value)}
-            min={new Date().toISOString().split("T")[0]}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]"
-          />
-        </div>
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <button
-            onClick={() => setOpenModalId(null)}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleOpenCohort}
-            className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600"
-          >
-            Reopen
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
 
       {/* Modal */}
       {showModal && (

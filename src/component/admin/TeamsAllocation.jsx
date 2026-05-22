@@ -51,19 +51,9 @@ const TeamsAllocation = () => {
     setIsDeadlineModalOpen(false);
   };
 
-
   const handleSaveDeadline = (deadlineData) => {
     console.log("💾 Deadline saved:", deadlineData);
-
-    // Exemple de traitement selon le type
-    if (deadlineData.type === "student-preferences") {
-      console.log("📝 Student preferences deadline updated");
-      // Mettre à jour l'état local ou appeler une API
-    } else if (deadlineData.type === "team-deliverables") {
-      console.log("📦 Team deliverables deadline updated");
-      // Mettre à jour l'état local ou appeler une API
-    }
-
+    // Ici vous pouvez faire un appel API pour sauvegarder
     alert("Deadline saved successfully!");
   };
 
