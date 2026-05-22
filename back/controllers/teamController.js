@@ -376,19 +376,28 @@ exports.deleteTeam = async (req, res) => {
       return res.status(403).json({ message: "Accès refusé. Seul le leader peut supprimer l'équipe" });
     }
 
-    if (!isAdmin && teams[0].project_id !== null) {
-      return res.status(400).json({ message: "Impossible de supprimer une équipe ayant un projet assigné" });
+    // ── Check project via BOTH team.project_id AND assignment table ───────
+    const hasDirectProject = teams[0].project_id !== null;
+    const [assignmentRows] = await db.execute(
+      "SELECT id FROM assignment WHERE team_id = ?", [id]
+    );
+    const hasAssignedProject = assignmentRows.length > 0;
+
+    if (!isAdmin && (hasDirectProject || hasAssignedProject)) {
+      return res.status(400).json({
+        message: "Impossible de supprimer une équipe ayant un projet assigné",
+      });
     }
 
-    // ── Delete in correct order to respect foreign keys ──────────────────
-    // 1. Get all conversation ids for this team
+    // ── Delete in correct FK order ─────────────────────────────────────────
+
+    // 1. Get all conversation ids
     const [convRows] = await db.execute(
-      "SELECT id FROM group_conversation WHERE team_id = ?",
-      [id]
+      "SELECT id FROM group_conversation WHERE team_id = ?", [id]
     );
     const convIds = convRows.map((r) => r.id);
 
-    // 2. Delete messages inside those conversations
+    // 2. Delete messages inside conversations
     if (convIds.length > 0) {
       await db.execute(
         `DELETE FROM group_message WHERE group_conversation_id IN (${convIds.map(() => '?').join(',')})`,
@@ -396,15 +405,26 @@ exports.deleteTeam = async (req, res) => {
       );
     }
 
-    // 3. Delete the conversations themselves
+    // 3. Delete conversations
     await db.execute("DELETE FROM group_conversation WHERE team_id = ?", [id]);
 
-    // 4. Delete team members
+    // 4. Delete wishes
+    await db.execute("DELETE FROM wish WHERE team_id = ?", [id]);
+
+    // 5. Delete meetings
+    await db.execute("DELETE FROM meeting WHERE team_id = ?", [id]);
+
+    // 6. Delete deliverables
+    await db.execute("DELETE FROM deliverable WHERE team_id = ?", [id]);
+
+    // 7. Delete assignments
+    await db.execute("DELETE FROM assignment WHERE team_id = ?", [id]);
+
+    // 8. Delete team members
     await db.execute("DELETE FROM team_member WHERE team_id = ?", [id]);
 
-    // 5. Finally delete the team
+    // 9. Finally delete the team
     await db.execute("DELETE FROM team WHERE id = ?", [id]);
-    // ─────────────────────────────────────────────────────────────────────
 
     res.json({ message: "Équipe supprimée avec succès" });
 
