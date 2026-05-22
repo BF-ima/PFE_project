@@ -95,7 +95,32 @@ const handleLogin = async (e) => {
           {/* Circle decoration */}
           <div className="absolute -top-16 -left-16 w-80 h-80 rounded-full bg-linear-to-r from-[#162A55] to-[#31A3D5] "/>
 
+<<<<<<< HEAD
             {/* PFE Letters with 3D effect */}
+=======
+          {/* Logo */}
+          <div className="relative z-10 flex flex-col items-center ">
+  <img src={logo} className="w-55 h-50 object-contain" alt="PFEFLOW logo" />
+</div>
+
+          {/* Hero text */}
+          <div className="relative z-10 text-center">
+            <h2 className="text-[20px] font-extrabold text-white leading-snug mb-2">
+              Your{" "}
+              <span className="text-white/90">PFE journey</span>,<br />
+              one platform.
+            </h2>
+            <p className="text-[14px] text-white/70 leading-[1.75] max-w-[195px]">
+              Smart academic project management for ESI Sidi Bel Abbès.
+            </p>
+
+            {/* Role pills */}
+
+          </div>
+
+          {/* Feature list + socials */}
+          <div className="relative z-10">
+>>>>>>> a62723c (Add new  updates)
             
               <div className="flex font-display">
                 <span
