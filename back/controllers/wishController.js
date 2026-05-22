@@ -86,7 +86,8 @@ exports.getAvailableProjects = async (req, res) => {
        LEFT JOIN users t ON p.teacher_id             = t.id
        LEFT JOIN users e ON p.external_supervisor_id = e.id
        WHERE p.status = 'VALIDATED'
-         AND p.speciality_id = ?
+        AND p.speciality_id = ?
+        AND p.assigned_student_email IS NULL
        ORDER BY p.created_at DESC`,
       [specialityId]
     );

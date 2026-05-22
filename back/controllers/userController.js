@@ -33,3 +33,19 @@ exports.searchUserByEmail = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
+
+
+// GET /api/users/check-email?email=x&role=y
+exports.emailcheck = ( async (req, res) => {
+  const { email, role } = req.query;
+  if (!email || !role) return res.status(400).json({ message: 'email and role required' });
+  try {
+    const [[user]] = await db.execute(
+      'SELECT id FROM users WHERE email = ? AND role = ?',
+      [email, role]
+    );
+    res.json({ exists: !!user });
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});

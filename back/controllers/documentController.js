@@ -29,6 +29,28 @@ const getTeamProject = async (teamId) => {
   return rows[0]?.project_id || null;
 };
 
+const isTeamLeader = async (userId, teamId) => {
+  const [rows] = await db.execute(
+    "SELECT leader_id FROM team WHERE id = ?",
+    [teamId]
+  );
+  return rows.length > 0 && rows[0].leader_id === userId;
+};
+
+const notifyExternalSupervisor = async (projectId, teamId, message) => {
+  const [[project]] = await db.execute(
+    "SELECT external_supervisor_id, title FROM project WHERE id = ?",
+    [projectId]
+  );
+  if (!project?.external_supervisor_id) return;
+
+  await db.execute(
+    `INSERT INTO notification (user_id, type, title, message, is_read, created_at)
+     VALUES (?, 'INFO', 'New Deliverable Submitted', ?, 0, NOW())`,
+    [project.external_supervisor_id, message]
+  );
+};
+
 // ── GET /api/documents ─────────────────────────────────────────────────────
 exports.getDocuments = async (req, res) => {
   const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
@@ -193,6 +215,11 @@ exports.uploadDeliverable = async (req, res) => {
     const teamId    = await getStudentTeam(user.id);
     if (!teamId) return res.status(400).json({ message: "Vous n'appartenez à aucune équipe" });
 
+      // ── LEADER CHECK ──────────────────────────────────────────────────────
+    const leader = await isTeamLeader(user.id, teamId);
+    if (!leader) return res.status(403).json({ message: "Seul le leader de l'équipe peut soumettre des livrables" });
+      // ─────────────────────────────────────────────────────────────────────
+
     const projectId = await getTeamProject(teamId);
     if (!projectId) return res.status(400).json({ message: "Aucun projet assigné à votre équipe" });
 
@@ -236,6 +263,16 @@ exports.uploadDeliverable = async (req, res) => {
       [projectId, teamId, title, fileUrl, file_type || file.mimetype, version]
     );
 
+
+    // Notify external supervisor if this is Source Code Repository
+if (title === 'Source Code Repository') {
+  await notifyExternalSupervisor(
+    projectId,
+    teamId,
+    `A team has submitted a new version of the Source Code Repository for project "${title}".`
+  );
+}
+
     res.status(201).json({ message: "Deliverable uploaded successfully" });
   } catch (err) {
     console.error("uploadDeliverable error:", err);
@@ -252,6 +289,11 @@ exports.submitRepoUrl = async (req, res) => {
     const user      = await getUserFromToken(token);
     const teamId    = await getStudentTeam(user.id);
     if (!teamId) return res.status(400).json({ message: "Vous n'appartenez à aucune équipe" });
+
+      // ── LEADER CHECK ──────────────────────────────────────────────────────
+    const leader = await isTeamLeader(user.id, teamId);
+    if (!leader) return res.status(403).json({ message: "Seul le leader de l'équipe peut soumettre des livrables" });
+      // ─────────────────────────────────────────────────────────────────────
 
     const projectId = await getTeamProject(teamId);
     if (!projectId) return res.status(400).json({ message: "Aucun projet assigné à votre équipe" });
@@ -292,6 +334,13 @@ exports.submitRepoUrl = async (req, res) => {
       );
     }
 
+    // Notify external supervisor
+await notifyExternalSupervisor(
+  projectId,
+  teamId,
+  `A team has submitted a new Source Code Repository URL for your project.`
+);
+
     res.json({ message: "Repository URL submitted successfully" });
   } catch (err) {
     console.error("submitRepoUrl error:", err);
@@ -307,8 +356,24 @@ exports.addFeedback = async (req, res) => {
   try {
     const user = await getUserFromToken(token);
     if (!["enseignant", "entreprise"].includes(user.role)) {
-      return res.status(403).json({ message: "Accès refusé" });
-    }
+  return res.status(403).json({ message: "Accès refusé" });
+}
+
+// External supervisors (entreprise) can only give feedback on Source Code Repository
+if (user.role === "entreprise") {
+  const [[deliverable]] = await db.execute(
+    "SELECT title FROM deliverable WHERE id = ?",
+    [id]
+  );
+  if (!deliverable) {
+    return res.status(404).json({ message: "Livrable introuvable" });
+  }
+  if (deliverable.title !== "Source Code Repository") {
+    return res.status(403).json({
+      message: "External supervisors can only give feedback on the Source Code Repository",
+    });
+  }
+}
 
     const { id }           = req.params;
     const { text, status } = req.body;
@@ -385,5 +450,29 @@ exports.getAllDeliverables = async (req, res) => {
   } catch (err) {
     console.error("getAllDeliverables error:", err);
     res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+// GET /api/documents/deliverables/is-leader
+exports.checkIsLeader = async (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1] || req.cookies?.token;
+  if (!token) return res.status(401).json({ isLeader: false });
+
+  try {
+    const user   = await getUserFromToken(token);
+    const teamId = await getStudentTeam(user.id);
+    if (!teamId) return res.json({ isLeader: false });
+
+    const [rows] = await db.execute(
+      "SELECT leader_id FROM team WHERE id = ?",
+      [teamId]
+    );
+
+    const isLeader = rows.length > 0 && rows[0].leader_id === user.id;
+    res.json({ isLeader });
+  } catch (err) {
+    console.error("checkIsLeader error:", err);
+    res.json({ isLeader: false });
   }
 };

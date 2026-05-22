@@ -16,6 +16,9 @@ const wishRoutes = require("./routes/wishRoutes");
 const meetingRoutes = require('./routes/meetingRoutes');
 
 
+const deliverableDeadline = require('./routes/deliverableDeadlineRoutes');
+
+
 const path = require('path');
 
 
@@ -66,6 +69,9 @@ app.use("/api/distribution", require("./routes/distributionRoutes"));
 app.use("/api/deadline", require("./routes/deadlineRoutes"));
 app.use("/api/documents", require("./routes/documentRoutes"));
 app.use('/api/meetings', meetingRoutes);
+
+
+app.use('/api/deliverable-deadlines', deliverableDeadline);
 
 
 app.use((err, req, res, next) => {

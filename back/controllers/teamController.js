@@ -651,8 +651,8 @@ exports.inviteMember = async (req, res) => {
 
   try {
     const user = await getUserFromToken(token);
-    const { id } = req.params;              // team id
-    const { student_id } = req.body;        // target student
+    const { id } = req.params;
+    const { student_id } = req.body;
 
     if (!student_id) {
       return res.status(400).json({ message: "student_id est requis" });
@@ -699,6 +699,30 @@ exports.inviteMember = async (req, res) => {
     if (existing.length > 0)
       return res.status(409).json({ message: "Une demande existe déjà pour cet étudiant" });
 
+    // ── SPECIALITY CHECK ──────────────────────────────────────────────────
+    // Fetch leader's speciality
+    const [leaderRows] = await db.execute(
+      "SELECT speciality_id FROM student WHERE id = ?",
+      [user.id]
+    );
+    if (leaderRows.length === 0)
+      return res.status(404).json({ message: "Profil du leader non trouvé" });
+
+    // Fetch invited student's speciality
+    const [invitedRows] = await db.execute(
+      "SELECT speciality_id FROM student WHERE id = ?",
+      [student_id]
+    );
+    if (invitedRows.length === 0)
+      return res.status(404).json({ message: "Profil de l'étudiant invité non trouvé" });
+
+    if (leaderRows[0].speciality_id !== invitedRows[0].speciality_id) {
+      return res.status(400).json({
+        message: "L'étudiant invité doit appartenir à la même spécialité que le leader",
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     await db.execute(
       `INSERT INTO team_member (team_id, student_id, joined_at, status) VALUES (?, ?, NOW(), 'PENDING')`,
       [id, student_id]
@@ -711,7 +735,6 @@ exports.inviteMember = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-
 // -----------------------------------------------------------------------------
 // GET TEAMS ASSIGNED TO SUPERVISOR  
 // -----------------------------------------------------------------------------

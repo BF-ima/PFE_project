@@ -40,6 +40,7 @@ router.post("/", upload.single("file"), ctrl.uploadDocument);
 // ── Deliverables (submitted by students) ──────────────────────────────────
 router.get("/deliverables/my",            ctrl.getMyDeliverables);
 router.get("/deliverables/all",           ctrl.getAllDeliverables);      // supervisor view
+router.get("/deliverables/is-leader", ctrl.checkIsLeader);
 router.post("/deliverables/upload",       upload.single("file"), ctrl.uploadDeliverable);
 router.post("/deliverables/repo",         ctrl.submitRepoUrl);
 router.post("/deliverables/:id/feedback", ctrl.addFeedback);             // supervisor feedback

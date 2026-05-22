@@ -47,14 +47,14 @@ exports.getConversations = async (req, res) => {
         ORDER BY gc.group_type ASC`,
        [user.id]
       );
-    } else if (["enseignant", "admin", "super_admin"].includes(user.role)) {
-      [rows] = await db.execute(
-        `SELECT gc.id AS conv_id, gc.team_id, gc.group_type, gc.supervisor_id, gc.created_at
-         FROM group_conversation gc
-         WHERE gc.supervisor_id = ? AND gc.group_type = 'team_supervisor'`,
-        [user.id]
-      );
-    }
+    } else if (["enseignant", "admin", "super_admin", "entreprise"].includes(user.role)) {
+  [rows] = await db.execute(
+    `SELECT gc.id AS conv_id, gc.team_id, gc.group_type, gc.supervisor_id, gc.created_at
+     FROM group_conversation gc
+     WHERE gc.supervisor_id = ? AND gc.group_type = 'team_supervisor'`,
+    [user.id]
+  );
+}
 
     const conversations = await Promise.all(
   rows.map(async (gc) => {
@@ -68,12 +68,12 @@ exports.getConversations = async (req, res) => {
 
     let supervisor = null;
     if (gc.supervisor_id) {
-      const [supRows] = await db.execute(
-        "SELECT id, CONCAT(first_name, ' ', last_name) AS name, email FROM users WHERE id = ?",
-        [gc.supervisor_id]
-      );
-      supervisor = supRows[0] || null;
-    }
+  const [supRows] = await db.execute(
+    "SELECT id, CONCAT(first_name, ' ', last_name) AS name, email, role FROM users WHERE id = ?",
+    [gc.supervisor_id]
+  );
+  supervisor = supRows[0] || null;
+}
 
     const [lastMsg] = await db.execute(
       `SELECT content, created_at FROM group_message
@@ -88,7 +88,7 @@ exports.getConversations = async (req, res) => {
       [gc.conv_id, user.id]
     );
 
-    // ── ADD THIS ──────────────────────────────────────────────────────────
+  
     const [leaderRows] = await db.execute(
       `SELECT CONCAT(u.first_name, ' ', u.last_name) AS name
        FROM users u
@@ -99,28 +99,33 @@ exports.getConversations = async (req, res) => {
       [gc.team_id]
     );
     const leaderName = leaderRows[0]?.name || 'Unknown team';
-    // ─────────────────────────────────────────────────────────────────────
+    
 
     return {
-      id:          gc.conv_id,
-      team_id:     gc.team_id,
-      group_type:  gc.group_type,
-      name: gc.group_type === "team"
-        ? "My team"
-        : user.role === "etudiant"
-          ? "Team + Supervisor"
-          : leaderName,
-      description: gc.group_type === "team"
-        ? "Conversation with my team members"
-        : user.role === "etudiant"
-          ? "Conversation with my team members and our supervisor"
-          : `${leaderName}'s team`,
-      members:     supervisor ? [...members, supervisor] : members,
-      supervisor,
-      lastMessage: lastMsg[0]?.content || "",
-      time:        lastMsg[0]?.created_at || gc.created_at,
-      unread:      unreadRow[0]?.cnt || 0,
-    };
+  id:             gc.conv_id,
+  team_id:        gc.team_id,
+  group_type:     gc.group_type,
+  supervisorRole: supervisor?.role || null,   // ← ADD THIS
+  name: gc.group_type === "team"
+    ? "My team"
+    : user.role === "etudiant"
+      ? supervisor?.role === "entreprise"
+        ? "Team + External Supervisor"
+        : "Team + Supervisor"
+      : leaderName,
+  description: gc.group_type === "team"
+    ? "Conversation with my team members"
+    : user.role === "etudiant"
+      ? supervisor?.role === "entreprise"
+        ? `Conversation with your team and external supervisor (${supervisor.name})`
+        : `Conversation with your team and supervisor (${supervisor.name})`
+      : `${leaderName}'s team`,
+  members:     supervisor ? [...members, supervisor] : members,
+  supervisor,
+  lastMessage: lastMsg[0]?.content || "",
+  time:        lastMsg[0]?.created_at || gc.created_at,
+  unread:      unreadRow[0]?.cnt || 0,
+};
   })
 );
 

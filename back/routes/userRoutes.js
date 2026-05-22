@@ -4,5 +4,6 @@ const userController = require("../controllers/userController");
 
 
 router.get("/search", userController.searchUserByEmail);
+router.get("/check-email", userController.emailcheck);
 
 module.exports = router;

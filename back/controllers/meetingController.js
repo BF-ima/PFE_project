@@ -60,15 +60,20 @@ exports.getMeetingsByTeam = async (req, res) => {
       if (!owns) return res.status(403).json({ message: "Accès refusé" });
     }
 
-    const [rows] = await db.execute(
-      `SELECT m.*,
-              CONCAT(u.first_name, ' ', u.last_name) AS created_by_name
-       FROM meeting m
-       LEFT JOIN users u ON u.id = m.created_by
-       WHERE m.team_id = ?
-       ORDER BY m.date ASC`,
-      [teamId]
-    );
+    // Supervisors only see meetings they created
+const [rows] = await db.execute(
+  `SELECT m.*,
+          CONCAT(u.first_name, ' ', u.last_name) AS created_by_name
+   FROM meeting m
+   LEFT JOIN users u ON u.id = m.created_by
+   WHERE m.team_id = ?
+    AND (
+      m.created_by = ?
+      OR ? IN ('admin', 'super_admin')
+    )
+   ORDER BY m.date ASC`,
+  [teamId, user.id, user.role]
+);
 
     res.json({ meetings: rows });
   } catch (err) {
@@ -112,16 +117,16 @@ exports.getMyMeetings = async (req, res) => {
       [teamId]
     );
 
-    // Fetch meetings for this team
-    const [meetings] = await db.execute(
-      `SELECT m.*,
-              CONCAT(u.first_name, ' ', u.last_name) AS created_by_name
-       FROM meeting m
-       LEFT JOIN users u ON u.id = m.created_by
-       WHERE m.team_id = ?
-       ORDER BY m.date ASC`,
-      [teamId]
-    );
+    // Students see meetings from ALL supervisors of their team
+const [meetings] = await db.execute(
+  `SELECT m.*,
+          CONCAT(u.first_name, ' ', u.last_name) AS created_by_name
+   FROM meeting m
+   LEFT JOIN users u ON u.id = m.created_by
+   WHERE m.team_id = ?
+   ORDER BY m.date ASC`,
+  [teamId]
+);
 
     const teamInfo = teamRows[0] || null;
     if (teamInfo?.member_names) {
