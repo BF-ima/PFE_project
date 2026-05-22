@@ -6,7 +6,7 @@ import { ProfileDropdown } from "./HomePage";
 import { fetchAnnouncements, createAnnouncement, getReadIds, markAnnouncementRead } from "../../api/announcements";
 import {
   Bell, Info, AlertCircle, AlertTriangle, Clock, Check,
-  MessageCircle, Trophy, Facebook, Linkedin,
+  MessageCircle, Trophy,
   Megaphone, Calendar, Users, X, Plus,
 } from "lucide-react";
 import AnnouncementDetailModal from "../../layout/AnnouncementDetailModal";
@@ -200,14 +200,7 @@ const Notifications = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a href="https://www.facebook.com/esisba.edu" target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm">
-                <Facebook size={14} />
-              </a>
-              <a href="https://www.linkedin.com/school/esisba" target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm">
-                <Linkedin size={14} />
-              </a>
+              
               <ProfileDropdown user={{ id: 1, firstName: "Supervisor", lastName: "", email: "supervisor@esi-sba.dz", role: "Supervisor" }}
                 onLogout={handleLogout} onChangePassword={() => {}} />
             </div>

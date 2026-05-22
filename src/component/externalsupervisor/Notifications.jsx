@@ -6,7 +6,7 @@ import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import { 
   Bell, Info, AlertCircle, AlertTriangle, Clock, Check, 
-  Facebook, Linkedin, Loader2
+   Loader2
 } from "lucide-react";
 
 const BASE = 'http://localhost:3000';
@@ -135,22 +135,7 @@ const Notifications = () => {
               </h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a
-                href="https://www.facebook.com/esisba.edu"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-              >
-                <Facebook size={14} className="sm:w-5 sm:h-5" />
-              </a>
-              <a
-                href="https://www.linkedin.com/school/esisba"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-              >
-                <Linkedin size={14} className="sm:w-5 sm:h-5" />
-              </a>
+              
               <ProfileDropdown
                 user={currentUser}
                 onLogout={handleLogout}

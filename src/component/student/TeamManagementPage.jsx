@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import StudentSidebar from '../../layout/StudentSidebar';
-import { Facebook, Linkedin, Users, UserPlus, X, Crown, Calendar, Mail } from 'lucide-react';
+import { Users, UserPlus, X, Crown, Calendar, Mail } from 'lucide-react';
 import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import CreateTeamModal from '../../layout/CreateTeamModal';
@@ -456,22 +456,7 @@ function TeamManagementPage() {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a
-                href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v"
-                target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="Facebook"
-              >
-                <Facebook size={14} className="sm:w-5 sm:h-5" />
-              </a>
-              <a
-                href="https://www.linkedin.com/in/https%3A%2F%2Fwww.linkedin.com%2Fschool%2Fesisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-linear-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="LinkedIn"
-              >
-                <Linkedin size={14} className="sm:w-5 sm:h-5" />
-              </a>
+              
               <ProfileDropdown
                 user={currentUser}
                 onLogout={handleLogout}

@@ -2,7 +2,6 @@ import React, { useState,useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ProfileDropdown } from './HomePage'; 
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { Facebook, Linkedin } from 'lucide-react';
 import useCurrentUser from '../../hooks/useCurrentUser';
 
 function ModifyProjectPage() {
@@ -120,19 +119,7 @@ useEffect(() => {
             </div>
 
             <div className="flex items-center gap-2">
-              <a href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v"
-                target="_blank" rel="noopener noreferrer"
-                className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="Facebook">
-                <Facebook size={18} />
-              </a>
-
-              <a href="https://www.linkedin.com/school/esisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all duration-300 shadow-sm"
-                title="LinkedIn">
-                <Linkedin size={18} />
-              </a>
+              
 
               <ProfileDropdown
                 user={currentUser}

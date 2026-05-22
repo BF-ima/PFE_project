@@ -4,7 +4,7 @@ import SupervisorSidebar from '../../layout/ExternalSupervisorSidebar';
 import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
-  Facebook, Linkedin, FolderOpen, Upload, FileText,
+   FolderOpen, Upload, FileText,
   Clock, Code2, Monitor, AlertCircle, ArrowUpFromLine,
   X, Check, Plus, Paperclip, Users, ChevronLeft, Loader2,
 } from 'lucide-react';
@@ -725,16 +725,7 @@ const ExternalSupervisorDocumentsPage = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a href="https://www.facebook.com/esisba.edu" target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-white rounded-lg shadow-sm"
-                style={{ background: 'linear-gradient(135deg, #18335E, #2D8FBF)' }}>
-                <Facebook size={14} />
-              </a>
-              <a href="https://www.linkedin.com/school/esisba" target="_blank" rel="noopener noreferrer"
-                className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-white rounded-lg shadow-sm"
-                style={{ background: 'linear-gradient(135deg, #18335E, #2D8FBF)' }}>
-                <Linkedin size={14} />
-              </a>
+              
               <ProfileDropdown user={currentUser} onLogout={handleLogout} onChangePassword={() => {}} />
             </div>
           </div>

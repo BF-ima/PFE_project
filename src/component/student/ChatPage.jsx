@@ -4,7 +4,7 @@ import StudentSidebar from '../../layout/StudentSidebar';
 import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
-  Facebook, Linkedin, Search, Paperclip, Send,
+   Search, Paperclip, Send,
   CheckCheck, Loader2, Users, GraduationCap,
 } from 'lucide-react';
 
@@ -401,20 +401,7 @@ const ChatPage = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <a
-                href="https://www.facebook.com/esisba.edu"
-                target="_blank" rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm"
-              >
-                <Facebook size={14} />
-              </a>
-              <a
-                href="https://www.linkedin.com/school/esisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm"
-              >
-                <Linkedin size={14} />
-              </a>
+              
               <ProfileDropdown
                 user={currentUser}
                 onLogout={handleLogout}

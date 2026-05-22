@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { Facebook, Linkedin, Check, Clock } from 'lucide-react';
+import {Check, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ProfileDropdown } from './HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
@@ -206,16 +206,6 @@ function AddProjectPage() {
               <h1 className="text-xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-2">
-              <a href="https://www.facebook.com/esisba.edu?mibextid=rS40aB7S9Ucbxw6v"
-                target="_blank" rel="noopener noreferrer"
-                className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm">
-                <Facebook size={18} />
-              </a>
-              <a href="https://www.linkedin.com/school/esisba"
-                target="_blank" rel="noopener noreferrer"
-                className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg shadow-sm">
-                <Linkedin size={18} />
-              </a>
               <ProfileDropdown user={currentUser} onLogout={handleLogout} />
             </div>
           </div>
