@@ -869,8 +869,6 @@ useEffect(() => {
             {activeTab === 'documents'    && <DocumentsTab />}
             {activeTab === 'deliverables' && <DeliverablesTab isLeader={isLeader} />}
 
-          {activeTab === 'documents'    && <DocumentsTab />}
-        {activeTab === 'deliverables' && <DeliverablesTab isLeader={isLeader} />}
       </>
     )}
 

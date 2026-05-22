@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import logo from "../assets/logo.jpg"
 import { 
   LayoutGrid, UserRoundCog, UsersRound, MessageCircle, Bell, GraduationCap,
   Building2, FileCheckCorner, ChartColumn, 
@@ -19,16 +20,10 @@ const Sidebar = ({ menuItems = MENU_ITEMS }) => {
   const location = useLocation();
 
   return (
-    <aside className="w-16 flex flex-col items-center py-4 gap-6 bg-white border-r border-gray-200">
+    <aside className="w-20 flex flex-col items-center py-4 gap-6 bg-white border-r border-gray-200">
       {/* Logo */}
-      <div className="w-10 h-10 flex items-center justify-center">
-        <img 
-          src="src/assets/PFE_icon.svg" 
-          alt="Logo" 
-          width={40} 
-          height={40}
-          className="object-contain"
-        />
+        <div className="flex items-center justify-center w-full h-12 px-1">
+        <img src={logo} alt="Logo" className="object-contain w-full h-auto" />
       </div>
       
       {/* Menu Items */}

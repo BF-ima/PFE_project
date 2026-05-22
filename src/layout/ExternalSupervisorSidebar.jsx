@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import logo from "../assets/logo.jpg"
 import { UsersRound, MessageCircle, Bell, Folder, Calendar } from 'lucide-react';
 
 const ExternalSupervisorSidebar = () => {
@@ -50,9 +51,9 @@ const ExternalSupervisorSidebar = () => {
   ];
 
   return (
-    <aside className="w-16 flex flex-col items-center py-4 gap-6 bg-white border-r border-gray-200 h-screen fixed left-0 top-0 z-50">
-      <div className="w-10 h-10 flex items-center justify-center">
-        <img src="/src/assets/PFE_icon.svg" alt="Logo" width={40} height={40} className="object-contain" />
+    <aside className="w-20 flex flex-col items-center py-4 gap-6 bg-white border-r border-gray-200 h-screen fixed left-0 top-0 z-50">
+        <div className="flex items-center justify-center w-full h-12 px-1">
+        <img src={logo} alt="Logo" className="object-contain w-full h-auto" />
       </div>
       {menuItems.map((item, index) => (
         <Link

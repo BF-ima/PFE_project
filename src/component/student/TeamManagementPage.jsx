@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import StudentSidebar from '../../layout/StudentSidebar';
-import { Facebook, Linkedin, Users, UserPlus, X, Crown, Calendar, Mail, TriangleAlert } from 'lucide-react';
+import { Facebook, Linkedin, Users, UserPlus, X, Crown, Calendar, Mail } from 'lucide-react';
 import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import CreateTeamModal from '../../layout/CreateTeamModal';
@@ -37,14 +37,15 @@ const EmptyTeamState = ({ onCreateTeam }) => (
 
 // ==================== TEAM EXISTS STATE ====================
 const TeamExistsState = ({ team, onSendInvitation, onRemoveMember, onDisbandTeam, isLeader }) => {
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [showDisbandModal, setShowDisbandModal] = useState(false);
+  const [showAddMemberModal,    setShowAddMemberModal]    = useState(false);
+  const [showDisbandModal,      setShowDisbandModal]      = useState(false);
   const [showDeleteMemberModal, setShowDeleteMemberModal] = useState(false);
-  const [memberToDelete, setMemberToDelete] = useState(null);
+  const [memberToDelete,        setMemberToDelete]        = useState(null);
+  const [disbanding,            setDisbanding]            = useState(false); // ← loading state
 
-  const leader = team?.members?.find(member => member.isLeader === true);
+  const leader      = team?.members?.find(member => member.isLeader === true);
   const memberCount = team?.members?.length || 0;
-  const maxMembers = team?.maxMembers || 2;
+  const maxMembers  = team?.maxMembers || 2;
 
   const getAvatarLetter = (name) => {
     if (!name) return '?';
@@ -88,9 +89,13 @@ const TeamExistsState = ({ team, onSendInvitation, onRemoveMember, onDisbandTeam
     setMemberToDelete(null);
   };
 
-  const confirmDisband = () => {
-    onDisbandTeam();
-    setShowDisbandModal(false);
+  // ── Key fix: await the API call, only close modal on success ──
+  const confirmDisband = async () => {
+    setDisbanding(true);
+    const success = await onDisbandTeam();
+    setDisbanding(false);
+    if (success) setShowDisbandModal(false);
+    // if !success: modal stays open, error toast already shown by parent
   };
 
   const formatDate = (dateString) => {
@@ -111,7 +116,13 @@ const TeamExistsState = ({ team, onSendInvitation, onRemoveMember, onDisbandTeam
           <span className="text-lg font-semibold text-[#1e3a5f]">Team number</span>
           <button
             onClick={handleDisbandClick}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+            disabled={!!team?.projectId}
+            title={team?.projectId ? "Cannot disband a team with an assigned project" : "Disband the team"}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors text-sm text-white
+              ${team?.projectId
+                ? "bg-red-300 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700 cursor-pointer"
+              }`}
           >
             <X size={14} />
             Disband the team
@@ -127,7 +138,9 @@ const TeamExistsState = ({ team, onSendInvitation, onRemoveMember, onDisbandTeam
               <div className="text-xs text-gray-500 mb-1">Leader</div>
               <div className="flex items-center gap-1">
                 <Crown size={14} className="text-yellow-500" />
-                <span className="text-gray-900 text-sm font-medium truncate">{leader?.name || team?.members?.[0]?.name || '-'}</span>
+                <span className="text-gray-900 text-sm font-medium truncate">
+                  {leader?.name || team?.members?.[0]?.name || '-'}
+                </span>
               </div>
             </div>
             <div className="bg-gray-100 rounded-lg p-2">
@@ -209,12 +222,16 @@ const TeamExistsState = ({ team, onSendInvitation, onRemoveMember, onDisbandTeam
         currentMemberCount={memberCount}
         teamId={team?.id}
       />
+
+      {/* Pass disbanding flag so the modal can disable its button */}
       <DisbandConfirmModal
         isOpen={showDisbandModal}
-        onClose={() => setShowDisbandModal(false)}
+        onClose={() => { if (!disbanding) setShowDisbandModal(false); }}
         onConfirm={confirmDisband}
+        disbanding={disbanding}
         teamId={team?.id}
       />
+
       <DeleteMemberConfirmModal
         isOpen={showDeleteMemberModal}
         onClose={() => setShowDeleteMemberModal(false)}
@@ -231,22 +248,20 @@ function TeamManagementPage() {
   const [hasTeam,         setHasTeam]        = useState(false);
   const [team,            setTeam]            = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [loadingTeam,     setLoadingTeam]     = useState(true); // ← prevents empty state flash
+  const [loadingTeam,     setLoadingTeam]     = useState(true);
 
   const { currentUser } = useCurrentUser();
 
-  // ── Fetch existing team on mount — MUST be here in TeamManagementPage ──
+  // ── Fetch existing team on mount ──────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) { 
-      setLoadingTeam(false); 
-      return; }
+    if (!token) { setLoadingTeam(false); return; }
 
     fetch("http://localhost:3000/api/teams/my", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
-        if (res.status === 404) return null; // no team yet — normal
+        if (res.status === 404) return null;
         if (!res.ok) throw new Error("Failed to fetch team");
         return res.json();
       })
@@ -297,19 +312,19 @@ function TeamManagementPage() {
 
       setTeam(prev => {
         if (!prev) return prev;
-        let updated = { ...prev };
+        let updated   = { ...prev };
         let newMembers = [...prev.members];
-        let anyAdded = false;
+        let anyAdded   = false;
 
         accepted.forEach((inv) => {
           const alreadyExists = newMembers.some(m => m.email === inv.email);
           if (!alreadyExists && newMembers.length < prev.maxMembers) {
             newMembers.push({
-              id: inv.id,
-              name: inv.name,
-              email: inv.email,
+              id:        inv.id,
+              name:      inv.name,
+              email:     inv.email,
               studentId: "",
-              isLeader: false,
+              isLeader:  false,
             });
             anyAdded = true;
           }
@@ -355,21 +370,23 @@ function TeamManagementPage() {
       toast.error(`Maximum ${team.maxMembers} members reached`);
       return;
     }
-    const leader = team.members.find(m => m.isLeader === true);
+
+    const leader      = team.members.find(m => m.isLeader === true);
     const senderName  = leader?.name  || team.members[0]?.name  || "Team Leader";
     const senderEmail = leader?.email || currentUser.email;
 
     const invitation = {
-      id: Date.now(),
-      name: newMember.name,
-      email: newMember.email,
+      id:          Date.now(),
+      name:        newMember.name,
+      email:       newMember.email,
       senderName,
       senderEmail,
-      status: "pending",
-      timeAgo: "Just now",
-      teamId: String(team.id),
-      teamName: `Team of ${leader?.name || "Leader"}`,
+      status:      "pending",
+      timeAgo:     "Just now",
+      teamId:      String(team.id),
+      teamName:    `Team of ${leader?.name || "Leader"}`,
     };
+
     const existing = JSON.parse(localStorage.getItem("pendingInvitations") || "[]");
     existing.push(invitation);
     localStorage.setItem("pendingInvitations", JSON.stringify(existing));
@@ -381,11 +398,36 @@ function TeamManagementPage() {
     setTeam({ ...team, members: team.members.filter(m => m.id !== memberId) });
   };
 
-  const handleDisbandTeam = () => {
-    localStorage.removeItem("pendingInvitations");
-    localStorage.removeItem("acceptedInvitations");
-    setHasTeam(false);
-    setTeam(null);
+  // ── Disband: call API first, only reset state on success ─────────────────
+  const handleDisbandTeam = async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !team?.id) return false;
+
+    try {
+      const res  = await fetch(`http://localhost:3000/api/teams/${team.id}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Cannot disband the team");
+        return false; // ← state NOT reset — team stays in UI
+      }
+
+      localStorage.removeItem("pendingInvitations");
+      localStorage.removeItem("acceptedInvitations");
+      setHasTeam(false);
+      setTeam(null);
+      toast.success("Team disbanded successfully");
+      return true;
+
+    } catch (err) {
+      console.error("Disband error:", err);
+      toast.error("Server error while disbanding the team");
+      return false;
+    }
   };
 
   const isLeader = team?.members?.some(
@@ -441,7 +483,6 @@ function TeamManagementPage() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="px-4 sm:px-6 lg:px-8 py-2 sm:py-3">
-            {/* loadingTeam prevents the empty state from flashing on refresh */}
             {loadingTeam ? (
               <div className="flex items-center justify-center h-64 text-gray-400">
                 Loading...
