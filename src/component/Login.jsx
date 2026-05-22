@@ -62,6 +62,7 @@ const handleLogin = async (e) => {
 
     if (data.role === "super_admin" || data.role === "admin") navigate("/projectsdashboard");
     else if (data.role === "enseignant") navigate("/supervisor/homepage");
+    else if (data.role === "entreprise") navigate("/external_supervisor/ChatPage");
     else if (data.role === "etudiant") navigate("/student/firstpage");
 
   } catch (err) {

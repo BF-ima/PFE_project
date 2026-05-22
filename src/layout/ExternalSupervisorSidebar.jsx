@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Clipboard, UsersRound, MessageCircle, Bell, Folder, Calendar, CalendarClock } from 'lucide-react';
-import { fetchAnnouncements, getUnreadCount } from '../api/announcements'; // ← add
+import { UsersRound, MessageCircle, Bell, Folder, Calendar } from 'lucide-react';
 
-const SupervisorSidebar = () => {
+const ExternalSupervisorSidebar = () => {
   const location = useLocation();
-  const [unreadCount,          setUnreadCount]          = useState(0);
-  const [chatUnreadCount,      setChatUnreadCount]      = useState(0);
-  const [announcementUnread,   setAnnouncementUnread]   = useState(0); // ← add
+  const [unreadCount,     setUnreadCount]     = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   useEffect(() => {
     const fetchUnread = async () => {
@@ -43,31 +41,12 @@ const SupervisorSidebar = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // ← add: poll announcements unread count
-  useEffect(() => {
-    const fetchAnnouncementUnread = async () => {
-      try {
-        const announcements = await fetchAnnouncements();
-        setAnnouncementUnread(getUnreadCount(announcements));
-      } catch {}
-    };
-    fetchAnnouncementUnread();
-    const interval = setInterval(fetchAnnouncementUnread, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // ← changed: Bell badge now shows notifications + announcements combined
-  const bellBadge = unreadCount + announcementUnread;
-
   const menuItems = [
-    { icon: LayoutGrid,    path: '/supervisor/homepage',      label: 'Dashboard'             },
-    { icon: Clipboard,     path: '/supervisor/projectsPage',  label: 'Project Portfolio'     },
-    { icon: UsersRound,    path: '/supervisor/teamspage',     label: 'My Teams'              },
-    { icon: MessageCircle, path: '/supervisor/chat',          label: 'Chat',         badge: chatUnreadCount },
-    { icon: Bell,          path: '/supervisor/notifications', label: 'Notifications', badge: bellBadge      }, // ← updated
-    { icon: Folder,        path: '/supervisor/documents',     label: 'Documents & Resources' },
-    { icon: CalendarClock, path: '/supervisor/deadlines',     label: 'Deadlines'             },
-    { icon: Calendar,      path: '/supervisor/meetings',      label: 'Meeting Management'    },
+    { icon: UsersRound,    path: '/external_supervisor/teamspage',    label: 'My Teams' },
+    { icon: MessageCircle, path: '/external_supervisor/chatpage',      label: 'Chat',            badge: chatUnreadCount },
+    { icon: Bell,          path: '/external_supervisor/notifications', label: 'Notifications',   badge: unreadCount     },
+    { icon: Folder,        path: '/external_supervisor/documentpage',  label: 'Documents & Resources' },
+    { icon: Calendar,      path: '/external_supervisor/meeting',       label: 'Meeting Management' },
   ];
 
   return (
@@ -98,4 +77,4 @@ const SupervisorSidebar = () => {
   );
 };
 
-export default SupervisorSidebar;
+export default ExternalSupervisorSidebar;

@@ -5,12 +5,15 @@ const AnnouncementsPanel = ({
   announcements,
   announcementFilter,
   setAnnouncementFilter,
-  onAnnouncementClick
+  onAnnouncementClick,
+  readAnnouncementIds = new Set(),
 }) => {
   const filteredAnnouncements = announcements.filter((a) => {
     if (announcementFilter === "all") return true;
     return a.type === announcementFilter;
   });
+
+  const unreadCount = announcements.filter(a => !readAnnouncementIds.has(a.id)).length;
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -42,7 +45,15 @@ const AnnouncementsPanel = ({
           </div>
           <div>
             <h2 className="text-lg font-semibold text-[#1e3a5f]">Announcements</h2>
-            <p className="text-sm text-gray-500">{announcements.length} total announcements</p>
+            <p className="text-sm text-gray-500">
+              {announcements.length} total
+              {unreadCount > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-[#2D8FBF] inline-block" />
+                  <span className="text-[#2D8FBF] font-medium">{unreadCount} unread</span>
+                </span>
+              )}
+            </p>
           </div>
         </div>
       </div>
@@ -70,32 +81,42 @@ const AnnouncementsPanel = ({
             <p className="text-lg font-medium">No announcements</p>
           </div>
         ) : (
-          filteredAnnouncements.map((announcement) => (
-            <div
-              key={announcement.id}
-              className="px-4 sm:px-6 py-5 hover:bg-gray-50 transition-colors cursor-pointer"
-              onClick={() => onAnnouncementClick(announcement)}
-            >
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-lg font-semibold text-gray-800">{announcement.title}</h3>
-                  <div className="flex items-center gap-2">{getTypeBadge(announcement.type)}</div>
-                </div>
-                <p className="text-sm text-gray-600 mt-2 leading-relaxed">{announcement.description}</p>
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Users size={14} className="text-gray-400" />
-                    <span className="text-xs text-gray-500 font-medium">{announcement.audience}</span>
+          filteredAnnouncements.map((announcement) => {
+            const isUnread = !readAnnouncementIds.has(announcement.id);
+            return (
+              <div
+                key={announcement.id}
+                className={`px-4 sm:px-6 py-5 hover:bg-gray-50 transition-colors cursor-pointer relative ${
+                  isUnread ? 'bg-blue-50/30' : ''
+                }`}
+                onClick={() => onAnnouncementClick(announcement)}
+              >
+                {/* Unread dot inside the row */}
+                {isUnread && (
+                  <span className="absolute top-5 right-4 w-2 h-2 rounded-full bg-[#2D8FBF]" />
+                )}
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between mb-1 pr-5">
+                    <h3 className={`text-lg font-semibold ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
+                      {announcement.title}
+                    </h3>
+                    <div className="flex items-center gap-2">{getTypeBadge(announcement.type)}</div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar size={14} className="text-gray-400" />
-                    {/* created_at from DB */}
-                    <span className="text-xs text-gray-500">{formatDate(announcement.created_at)}</span>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">{announcement.description}</p>
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Users size={14} className="text-gray-400" />
+                      <span className="text-xs text-gray-500 font-medium">{announcement.audience}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Calendar size={14} className="text-gray-400" />
+                      <span className="text-xs text-gray-500">{formatDate(announcement.created_at)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

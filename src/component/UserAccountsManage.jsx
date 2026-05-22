@@ -10,7 +10,6 @@ import {
   ChevronRight,
   MoreVertical,
   UserPlus,
-  Filter,
   Search,
   X,
   Eye,
@@ -737,9 +736,7 @@ const handleBulkImport = () => {
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                 <Upload size={16} /> Import Excel
               </button>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                <Filter size={16} /> Filter
-              </button>
+              
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input type="text" placeholder="Search User" value={searchQuery}

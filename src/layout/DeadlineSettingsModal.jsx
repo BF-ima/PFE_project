@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Clock, Save } from "lucide-react";
 
 const DeadlineSettingsModal = ({ isOpen, onClose, onSave }) => {
+  const [deadlineType, setDeadlineType] = useState('wish_submission');
   const [formData, setFormData] = useState({
     date: "",
     time: "",
@@ -10,30 +11,32 @@ const DeadlineSettingsModal = ({ isOpen, onClose, onSave }) => {
   });
   const [scheduledInfo, setScheduledInfo] = useState(null);
 
-  // ── Load existing deadline when modal opens ──
+  // ── Load existing deadline when modal opens or type changes ──
   useEffect(() => {
     if (!isOpen) return;
     const token = localStorage.getItem("token");
-    fetch("http://localhost:3000/api/deadline", {
+    fetch(`http://localhost:3000/api/deadline?type=${deadlineType}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
       .then(data => {
         if (data.deadline) {
-          const dt   = new Date(data.deadline.deadline_at);
-          const date = dt.toISOString().split("T")[0];
-          const time = dt.toTimeString().slice(0, 5);
+          const dateStr = data.deadline.deadline_date.slice(0, 10);
+          const timeStr = (data.deadline.deadline_time || '00:00').slice(0, 5);
           setFormData({
-            date,
-            time,
+            date:         dateStr,
+            time:         timeStr,
             sendReminder: !!data.deadline.send_reminder,
             sendUrgent:   !!data.deadline.send_urgent,
           });
-          setScheduledInfo({ date, time });
+          setScheduledInfo({ date: dateStr, time: timeStr });
+        } else {
+          setFormData({ date: "", time: "", sendReminder: false, sendUrgent: false });
+          setScheduledInfo(null);
         }
       })
       .catch(console.error);
-  }, [isOpen]);
+  }, [isOpen, deadlineType]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -47,20 +50,14 @@ const DeadlineSettingsModal = ({ isOpen, onClose, onSave }) => {
   // ── Broadcast helper ──
   const broadcast = async (token, type, title, message) => {
     try {
-      console.log("Calling broadcast with:", { type, title });
       const r = await fetch("http://localhost:3000/api/notifications/broadcast", {
         method:  "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ type, title, message, role: "etudiant" }),
       });
       const d = await r.json();
-      console.log("broadcast status:", r.status, "body:", d);
       if (!r.ok) alert(`Broadcast failed: ${d.message}`);
     } catch (err) {
-      console.error("broadcast fetch error:", err);
       alert(`Network error: ${err.message}`);
     }
   };
@@ -73,98 +70,61 @@ const DeadlineSettingsModal = ({ isOpen, onClose, onSave }) => {
     try {
       const token = localStorage.getItem("token");
 
-      // ── Capture ALL values before any state reset or async gaps ──
       const capturedDate     = formData.date;
       const capturedTime     = formData.time;
       const capturedReminder = formData.sendReminder;
       const capturedUrgent   = formData.sendUrgent;
-
-      console.log("Captured values:", { capturedDate, capturedTime, capturedReminder, capturedUrgent });
+      const capturedType     = deadlineType;
 
       // 1 — Save the deadline
       const res = await fetch("http://localhost:3000/api/deadline", {
         method:  "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           date:         capturedDate,
           time:         capturedTime,
           sendReminder: capturedReminder,
           sendUrgent:   capturedUrgent,
+          type:         capturedType,
         }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.message || "Failed to save deadline"); return; }
 
-      const deadlineAt = new Date(`${capturedDate}T${capturedTime}:00`);
-      const now        = Date.now();
+      // 2 — Notifications only for wish_submission deadline
+      if (capturedType === 'wish_submission') {
+        const deadlineAt = new Date(`${capturedDate}T${capturedTime}:00`);
+        const now        = Date.now();
 
-      console.log("deadlineAt:", deadlineAt);
-      console.log("now:", new Date(now));
-
-      // 2 — Reminder notification (24h before)
-      if (capturedReminder) {
-        const delayReminder = deadlineAt.getTime() - 24 * 60 * 60 * 1000 - now;
-
-        console.log(`⏰ Reminder delay: ${Math.round(delayReminder / 1000)}s (${Math.round(delayReminder / 1000 / 60)} min)`);
-
-        if (delayReminder > 0) {
-          console.log("⏰ Reminder: scheduling setTimeout");
-          setTimeout(() => {
-            console.log("⏰ Reminder setTimeout FIRED");
-            broadcast(
-              token,
-              "REMINDER",
-              "⏰ Deadline Reminder",
+        if (capturedReminder) {
+          const delayReminder = deadlineAt.getTime() - 24 * 60 * 60 * 1000 - now;
+          if (delayReminder > 0) {
+            setTimeout(() => broadcast(token, "REMINDER", "⏰ Deadline Reminder",
               `The project preference submission deadline is tomorrow at ${capturedTime}. Make sure to submit your preferences before it's too late!`
+            ), delayReminder);
+          } else {
+            await broadcast(token, "REMINDER", "⏰ Deadline Reminder",
+              `The project preference submission deadline is on ${capturedDate} at ${capturedTime}. Make sure to submit your preferences before it's too late!`
             );
-          }, delayReminder);
-        } else {
-          console.log("⏰ Reminder: delay passed, sending immediately");
-          await broadcast(
-            token,
-            "REMINDER",
-            "⏰ Deadline Reminder",
-            `The project preference submission deadline is on ${capturedDate} at ${capturedTime}. Make sure to submit your preferences before it's too late!`
-          );
+          }
         }
-      }
 
-      // 3 — Urgent notification (2h before)
-      if (capturedUrgent) {
-        const delayUrgent = deadlineAt.getTime() - 2 * 60 * 60 * 1000 - now;
-
-        console.log(`🚨 Urgent delay: ${Math.round(delayUrgent / 1000)}s (${Math.round(delayUrgent / 1000 / 60)} min)`);
-
-        if (delayUrgent > 0) {
-          console.log("🚨 Urgent: scheduling setTimeout");
-          setTimeout(() => {
-            console.log("🚨 Urgent setTimeout FIRED");
-            broadcast(
-              token,
-              "ALERT",
-              "🚨 Urgent: Deadline in 2 Hours!",
+        if (capturedUrgent) {
+          const delayUrgent = deadlineAt.getTime() - 2 * 60 * 60 * 1000 - now;
+          if (delayUrgent > 0) {
+            setTimeout(() => broadcast(token, "ALERT", "🚨 Urgent: Deadline in 2 Hours!",
               `The project preference submission deadline is in 2 hours (at ${capturedTime}). Submit your preferences immediately!`
+            ), delayUrgent);
+          } else {
+            await broadcast(token, "ALERT", "🚨 Urgent: Deadline Very Soon!",
+              `The project preference submission deadline is at ${capturedTime} today. Submit your preferences immediately!`
             );
-          }, delayUrgent);
-        } else {
-          console.log("🚨 Urgent: delay passed, sending immediately");
-          await broadcast(
-            token,
-            "ALERT",
-            "🚨 Urgent: Deadline Very Soon!",
-            `The project preference submission deadline is at ${capturedTime} today. Submit your preferences immediately!`
-          );
+          }
         }
       }
 
       setScheduledInfo({ date: capturedDate, time: capturedTime });
-      onSave({ date: capturedDate, time: capturedTime, sendReminder: capturedReminder, sendUrgent: capturedUrgent });
-
-      // ── Call onClose() directly, NOT handleClose() ──
-      // handleClose() resets formData which could interfere with setTimeout closures
+      onSave({ date: capturedDate, time: capturedTime, sendReminder: capturedReminder, sendUrgent: capturedUrgent, type: capturedType });
       onClose();
 
     } catch (err) {
@@ -195,13 +155,35 @@ const DeadlineSettingsModal = ({ isOpen, onClose, onSave }) => {
 
         {/* Body */}
         <div className="px-6 py-5 space-y-6">
+
+          {/* ── Type tabs ── */}
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
+            {[
+              { value: 'wish_submission',    label: '📋 Student Wish List' },
+              { value: 'project_submission', label: '📁 Project Submission' },
+            ].map(opt => (
+              <button key={opt.value} type="button"
+                onClick={() => setDeadlineType(opt.value)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  deadlineType === opt.value
+                    ? 'bg-white text-[#1e3a5f] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           <div>
-            <h3 className="text-base font-semibold text-[#1e3a5f] mb-2">
-              Student Preference Submission Deadline
+            <h3 className="text-base font-semibold text-[#1e3a5f] mb-1">
+              {deadlineType === 'wish_submission'
+                ? 'Student Preference Submission Deadline'
+                : 'Project Submission Deadline'}
             </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Set the deadline for students to submit their project preference lists.
-              After this deadline, students will no longer be able to modify their preferences.
+            <p className="text-sm text-gray-500 mb-4">
+              {deadlineType === 'wish_submission'
+                ? 'Set the deadline for students to submit their project preference lists. After this deadline, students will no longer be able to modify their preferences.'
+                : 'Set the deadline for supervisors to add new projects. After this deadline, supervisors will no longer be able to submit new projects.'}
             </p>
 
             {/* Currently active deadline */}
@@ -250,45 +232,47 @@ const DeadlineSettingsModal = ({ isOpen, onClose, onSave }) => {
             </button>
           </div>
 
-          <hr className="border-gray-200" />
+          {/* Additional Options — only for wish_submission */}
+          {deadlineType === 'wish_submission' && (
+            <>
+              <hr className="border-gray-200" />
+              <div>
+                <h3 className="text-base font-semibold text-[#1e3a5f] mb-4">Additional Options</h3>
+                <div className="space-y-4">
 
-          {/* Additional Options */}
-          <div>
-            <h3 className="text-base font-semibold text-[#1e3a5f] mb-4">Additional Options</h3>
-            <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <input type="checkbox" id="sendReminder" checked={formData.sendReminder}
+                      onChange={() => handleCheckboxChange("sendReminder")}
+                      className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                    <div>
+                      <label htmlFor="sendReminder" className="text-sm font-medium text-gray-700 cursor-pointer">
+                        Send Reminder notifications
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Automatically send reminders to students 24 hours before the deadline
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Reminder */}
-              <div className="flex items-start gap-3">
-                <input type="checkbox" id="sendReminder" checked={formData.sendReminder}
-                  onChange={() => handleCheckboxChange("sendReminder")}
-                  className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
-                <div>
-                  <label htmlFor="sendReminder" className="text-sm font-medium text-gray-700 cursor-pointer">
-                    Send Reminder notifications
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Automatically send reminders to students 24 hours before the deadline
-                  </p>
+                  <div className="flex items-start gap-3">
+                    <input type="checkbox" id="sendUrgent" checked={formData.sendUrgent}
+                      onChange={() => handleCheckboxChange("sendUrgent")}
+                      className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                    <div>
+                      <label htmlFor="sendUrgent" className="text-sm font-medium text-gray-700 cursor-pointer">
+                        Send Urgent notifications
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Automatically send urgent notifications to students 2 hours before the deadline
+                      </p>
+                    </div>
+                  </div>
+
                 </div>
               </div>
+            </>
+          )}
 
-              {/* Urgent */}
-              <div className="flex items-start gap-3">
-                <input type="checkbox" id="sendUrgent" checked={formData.sendUrgent}
-                  onChange={() => handleCheckboxChange("sendUrgent")}
-                  className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
-                <div>
-                  <label htmlFor="sendUrgent" className="text-sm font-medium text-gray-700 cursor-pointer">
-                    Send Urgent notifications
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Automatically send urgent notifications to students 2 hours before the deadline
-                  </p>
-                </div>
-              </div>
-
-            </div>
-          </div>
         </div>
       </div>
     </div>

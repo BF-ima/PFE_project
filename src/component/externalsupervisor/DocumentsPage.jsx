@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import { ProfileDropdown } from './HomePage';
+import SupervisorSidebar from '../../layout/ExternalSupervisorSidebar';
+import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
   Facebook, Linkedin, FolderOpen, Upload, FileText,
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { FaFileCircleCheck } from 'react-icons/fa6';
 
-const BASE     = 'http://localhost:3000';
+const BASE      = 'http://localhost:3000';
 const getToken  = () => localStorage.getItem('token');
 const authHeader = () => ({ Authorization: `Bearer ${getToken()}` });
 
@@ -193,7 +193,7 @@ const AuthorizationModal = ({ team, onClose, onConfirm }) => {
 const UploadDocumentModal = ({ onClose, onUploaded, supervisorProjects }) => {
   const [category,     setCategory]     = useState('Tutorial');
   const [selectedFile, setSelectedFile] = useState(null);
-  const [projectId,    setProjectId]    = useState('');  // '' = all teams
+  const [projectId,    setProjectId]    = useState('');
   const [dragActive,   setDragActive]   = useState(false);
   const [loading,      setLoading]      = useState(false);
   const fileInputRef = useRef(null);
@@ -223,7 +223,7 @@ const UploadDocumentModal = ({ onClose, onUploaded, supervisorProjects }) => {
       formData.append('file',      selectedFile);
       formData.append('title',     selectedFile.name);
       formData.append('file_type', category);
-      if (projectId) formData.append('project_id', projectId); // optional
+      if (projectId) formData.append('project_id', projectId);
 
       const res  = await fetch(`${BASE}/api/documents`, {
         method:  'POST',
@@ -249,7 +249,6 @@ const UploadDocumentModal = ({ onClose, onUploaded, supervisorProjects }) => {
         </div>
 
         <div className="p-5 space-y-4">
-
           {/* Category */}
           <div>
             <label className="block text-sm font-bold mb-1" style={{ color: '#193962' }}>
@@ -327,6 +326,7 @@ const UploadDocumentModal = ({ onClose, onUploaded, supervisorProjects }) => {
     </div>
   );
 };
+
 // ── Doc Card ───────────────────────────────────────────────────────────────
 const DocCard = ({ doc }) => {
   const badge = TYPE_BADGE[doc.type] || TYPE_BADGE.Other;
@@ -341,7 +341,6 @@ const DocCard = ({ doc }) => {
           <div>
             <p className="text-base font-bold text-gray-900 leading-tight">{doc.name}</p>
             <p className="text-sm text-gray-400 mt-1">{doc.uploaded_by} · {formatDate(doc.created_at)}</p>
-            {/* Show target */}
             <p className="text-xs mt-1" style={{ color: '#2D8FBF' }}>
               {doc.project_title ? `→ ${doc.project_title}` : '→ All teams'}
             </p>
@@ -361,7 +360,6 @@ const DocCard = ({ doc }) => {
 };
 
 // ── Documents Tab ──────────────────────────────────────────────────────────
-// DocumentsTab — add supervisorProjects prop back
 const DocumentsTab = ({ supervisorProjects }) => {
   const [documents,       setDocuments]       = useState([]);
   const [loading,         setLoading]         = useState(true);
@@ -426,10 +424,12 @@ const DocumentsTab = ({ supervisorProjects }) => {
   );
 };
 
-// ── Deliverable Card (supervisor view) ─────────────────────────────────────
+// ── Deliverable Card (external supervisor view) ────────────────────────────
+// ⚠ External supervisors can ONLY give feedback on "Source Code Repository"
 const DeliverableCard = ({ item, onFeedback }) => {
-  const isSubmitted = !!item.file_path;
-  const badge       = item.status ? (STATUS_BADGE[item.status] || STATUS_BADGE.PENDING) : null;
+  const isSubmitted       = !!item.file_path;
+  const badge             = item.status ? (STATUS_BADGE[item.status] || STATUS_BADGE.PENDING) : null;
+  const canGiveFeedback   = isSubmitted && item.title === 'Source Code Repository';
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl px-6 py-5">
@@ -444,12 +444,21 @@ const DeliverableCard = ({ item, onFeedback }) => {
           </div>
           <h3 className="text-base font-bold" style={{ color: '#1e3a5f' }}>{item.title}</h3>
         </div>
-        {isSubmitted && (
+
+        {/* Only show Feedback button for Source Code Repository */}
+        {canGiveFeedback && (
           <button onClick={() => onFeedback(item)}
             className="px-4 py-1.5 rounded-lg text-sm font-bold text-white hover:opacity-90"
             style={{ backgroundColor: '#1e3a5f' }}>
             Feedback
           </button>
+        )}
+
+        {/* For other deliverables that are submitted, show a read-only label */}
+        {isSubmitted && !canGiveFeedback && (
+          <span className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 bg-gray-100 border border-gray-200">
+            View only
+          </span>
         )}
       </div>
 
@@ -461,7 +470,7 @@ const DeliverableCard = ({ item, onFeedback }) => {
                 className="text-sm font-semibold text-blue-600 hover:underline">
                 {item.file_type === 'url' ? item.file_path : `Version ${item.version}`}
               </a>
-              <p className="text-xs text-gray-400 mt-0.5"> {formatDate(item.uploaded_at)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{formatDate(item.uploaded_at)}</p>
             </div>
             {badge && (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -514,8 +523,6 @@ const TeamDeliverablesDetail = ({ team, onBack }) => {
       const res  = await fetch(`${BASE}/api/documents/deliverables/all`, { headers: authHeader() });
       const data = await res.json();
       const all  = data.deliverables || [];
-
-      // FIX: filter by team_id, not project_title — avoids mixing teams on the same project
       const teamDelivs = all.filter(d => d.team_id === team.team_id);
       setDeliverables(teamDelivs);
     } catch (err) { console.error(err); }
@@ -687,7 +694,7 @@ const DeliverablesTab = () => {
 };
 
 // ── Main Page ──────────────────────────────────────────────────────────────
-const SupervisorDocumentsPage = () => {
+const ExternalSupervisorDocumentsPage = () => {
   const navigate = useNavigate();
   const { currentUser } = useCurrentUser();
   const [activeTab,          setActiveTab]          = useState('documents');
@@ -763,4 +770,4 @@ const SupervisorDocumentsPage = () => {
   );
 };
 
-export default SupervisorDocumentsPage;
+export default ExternalSupervisorDocumentsPage;
