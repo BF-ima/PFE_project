@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Jockey+One&display=swap');
+@import "tailwindcss";
+@theme {
+  --font-display: "Jockey One", sans-serif;
+}
+
+
+body{
+  font-family: "Nunito", sans-serif;
+}
