@@ -208,9 +208,10 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd, specialities = [], pro
       value={formData.rank}
       onChange={set('rank')}
       options={[
-        { value: 'A', label: 'A' },
-        { value: 'B', label: 'B' },
-        { value: 'C', label: 'C' },
+        { value: 'Professeur', label: 'Professeur' },
+        { value: 'MCF A', label: 'MCF A' },
+        { value: 'MCF B', label: 'MCF B' },
+        { value: 'Maitre Assistant', label: 'Maitre Assistant' },
       ]}
     />
   </>

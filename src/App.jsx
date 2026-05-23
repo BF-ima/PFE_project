@@ -34,6 +34,7 @@ import SupervisorDocumentsPage from './component/supervisor/DocumentsPage';
 import DeliverableDocumentPage from './component/supervisor/SupervisorDeadlinesPage.jsx';
 import MeetingManagement from './component/supervisor/MeetingManagement';
 import StudentMeetingPage from './component/student/StudentMeetingPage';
+import ResultPage from './component/student/ResultPage';
 
 
 
@@ -73,6 +74,7 @@ function App() {
         <Route index path='/allocationresults' element={<AllocationResults />} /> {/*Admin session */}
         <Route index path='/teams-list' element={<TeamsList />} /> {/*Admin session */}
         <Route index path='/admin-notifications' element={<AdminNotifications />} /> {/*Admin session */}
+        <Route index path='/notifications' element={<AdminNotifications />} />
         <Route index path='/messaging' element={<Messaging />} /> {/*Admin session */}
         <Route index path='/announcements' element={<Announcements />} /> {/*Admin session */}
         <Route index path='/defense-manage' element={<DefenseManagement />} /> {/*Admin session */}
@@ -84,6 +86,7 @@ function App() {
         <Route path='supervisor/meetings' element={<MeetingManagement />} />
         <Route path='supervisor/deadlines' element={<DeliverableDocumentPage />} />
         <Route path='student/meetings' element={<StudentMeetingPage />} />
+        <Route path="/student/results" element={<ResultPage />} />
 
 
 

@@ -4,7 +4,7 @@ import SupervisorSidebar from '../../layout/SupervisorSidebar';
 import { ProfileDropdown } from './HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
- FolderOpen, Upload, FileText,
+   FolderOpen, Upload, FileText,
   Clock, Code2, Monitor, AlertCircle, ArrowUpFromLine,
   X, Check, Plus, Paperclip, Users, ChevronLeft, Loader2,
 } from 'lucide-react';
@@ -137,7 +137,6 @@ const SaveFeedbackModal = ({ deliverable, onClose, onSaved }) => {
 const AuthorizationModal = ({ team, onClose, onConfirm }) => {
   const [validations, setValidations] = useState({ report: false, sourceCode: false, presentation: false });
   const [comment,     setComment]     = useState('');
-  const allValidated = validations.report && validations.sourceCode && validations.presentation;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -152,23 +151,6 @@ const AuthorizationModal = ({ team, onClose, onConfirm }) => {
           </p>
         </div>
         <div className="px-6 pb-3">
-          <p className="text-sm font-semibold text-gray-700 mb-2">Deliverables validation</p>
-          <div className="space-y-2">
-            {[
-              { key: 'report',       label: 'Final report validated'   },
-              { key: 'sourceCode',   label: 'Source code validated'    },
-              { key: 'presentation', label: 'Presentation validated'   },
-            ].map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2">
-                <input type="checkbox" checked={validations[key]}
-                  onChange={() => setValidations(v => ({ ...v, [key]: !v[key] }))}
-                  className="w-4 h-4 rounded border-gray-300 text-[#2D8FBF] focus:ring-[#2D8FBF]" />
-                <span className="text-sm text-gray-700">{label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="px-6 pb-3">
           <p className="text-sm font-semibold text-gray-700 mb-2">Readiness assessment</p>
           <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3}
             placeholder="Write a comment for the admin about the readiness of this team"
@@ -177,8 +159,7 @@ const AuthorizationModal = ({ team, onClose, onConfirm }) => {
         <div className="flex gap-3 px-6 pb-6 pt-2">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-gray-600 bg-[#D1D5DB] hover:opacity-80">Cancel</button>
           <button
-            onClick={() => { if (allValidated) { onConfirm({ validations, comment }); onClose(); } }}
-            disabled={!allValidated}
+            onClick={() => { onConfirm(comment); onClose(); }}
             className="flex-1 py-2 rounded-lg text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg, #1e3a5f, #2D8FBF)' }}>
             Send
@@ -457,11 +438,22 @@ const DeliverableCard = ({ item, onFeedback }) => {
         <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#F3F4F6' }}>
           <div className="flex items-center justify-between">
             <div>
-              <a href={item.file_path} target="_blank" rel="noopener noreferrer"
+              <a href={
+                  item.file_type === 'url'
+                    ? item.file_path
+                    : item.file_path
+                        ? item.file_path.includes('cloudinary.com')
+                          ? item.file_path.replace('/upload/', '/upload/fl_attachment/')
+                          : item.file_path
+                        : '#'
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                download={item.file_type !== 'url'}
                 className="text-sm font-semibold text-blue-600 hover:underline">
-                {item.file_type === 'url' ? item.file_path : `Version ${item.version}`}
+                {item.file_type === 'url' ? item.file_path : `Version ${item.version} — Download`}
               </a>
-              <p className="text-xs text-gray-400 mt-0.5"> {formatDate(item.uploaded_at)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">v{item.version} · {formatDate(item.uploaded_at)}</p>
             </div>
             {badge && (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -500,6 +492,8 @@ const DeliverableCard = ({ item, onFeedback }) => {
 
 // ── Team Deliverables Detail ───────────────────────────────────────────────
 const TeamDeliverablesDetail = ({ team, onBack }) => {
+  const [requestStatus, setRequestStatus] = useState(null); // null | 'PENDING' | 'APPROVED' | 'REJECTED'
+  const [authLoading,   setAuthLoading]   = useState(false);
   const [deliverables,  setDeliverables]  = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [feedbackModal, setFeedbackModal] = useState(null);
@@ -507,6 +501,14 @@ const TeamDeliverablesDetail = ({ team, onBack }) => {
   const [authSent,      setAuthSent]      = useState(false);
 
   const TITLES = ['Final Report', 'Source Code Repository', 'Defense Presentation'];
+
+  // Add this useEffect:
+useEffect(() => {
+  fetch(`${BASE}/api/soutenance/requests/team/${team.team_id}`, { headers: authHeader() })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => { if (data?.request) setRequestStatus(data.request.status); })
+    .catch(console.error);
+}, [team.team_id]);
 
   const fetchDeliverables = useCallback(async () => {
     setLoading(true);
@@ -528,6 +530,27 @@ const TeamDeliverablesDetail = ({ team, onBack }) => {
 
   const submitted   = TITLES.filter(t => getDeliverable(t)).length;
   const progressPct = (submitted / 3) * 100;
+
+    const handleSendAuthorization = async (comment) => {
+  setAuthLoading(true);
+  try {
+    const res  = await fetch(`${BASE}/api/soutenance/requests`, {
+      method:  'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ team_id: team.team_id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.message);
+      return;
+    }
+    setRequestStatus('PENDING');
+  } catch {
+    alert('Server error');
+  } finally {
+    setAuthLoading(false);
+  }
+};
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
@@ -580,13 +603,26 @@ const TeamDeliverablesDetail = ({ team, onBack }) => {
         )}
 
         {/* Defense authorization */}
-        <button
-          onClick={() => !authSent && setShowAuthModal(true)}
-          disabled={authSent}
-          className="w-full py-3 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ backgroundColor: '#1e3a5f' }}>
-          {authSent ? '✓ Authorization Sent' : 'Send defense authorization request'}
-        </button>
+{(() => {
+  const alreadySent = requestStatus === 'PENDING' || requestStatus === 'APPROVED';
+  const label = requestStatus === 'PENDING'  ? '⏳ Authorization Pending'
+              : requestStatus === 'APPROVED' ? '✓ Authorization Approved'
+              : requestStatus === 'REJECTED' ? '↩ Re-submit Authorization'
+              : 'Send defense authorization request';
+  return (
+    <button
+      onClick={() => !alreadySent && !authLoading && setShowAuthModal(true)}
+      disabled={alreadySent || authLoading}
+      className="w-full py-3 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+      style={{ backgroundColor: '#1e3a5f' }}>
+      {authLoading && <Loader2 size={14} className="animate-spin" />}
+      {label}
+    </button>
+  );
+})()}
+
+
+       
       </div>
 
       {feedbackModal && (
@@ -600,7 +636,7 @@ const TeamDeliverablesDetail = ({ team, onBack }) => {
         <AuthorizationModal
           team={team}
           onClose={() => setShowAuthModal(false)}
-          onConfirm={() => setAuthSent(true)}
+          onConfirm={handleSendAuthorization}
         />
       )}
     </div>
@@ -718,7 +754,6 @@ const SupervisorDocumentsPage = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f]">Project Dashboard</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-            
               <ProfileDropdown user={currentUser} onLogout={handleLogout} onChangePassword={() => {}} />
             </div>
           </div>

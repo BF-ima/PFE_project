@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import logo from "../assets/logo.jpg"
 import { fetchAnnouncements, getUnreadCount } from './../api/announcements';
 import {
-  LayoutGrid, UsersRound, Star, MessageCircle, Bell, Folder, Calendar
+  LayoutGrid, UsersRound, Star, MessageCircle, Bell, Folder, Calendar, Trophy
 } from 'lucide-react';
 
 const StudentSidebar = () => {
@@ -72,9 +72,10 @@ const StudentSidebar = () => {
     { icon: UsersRound,    path: '/student/TeamManagementPage', label: 'Team Management' },
     { icon: Star,          path: '/student/preferencelist',     label: 'Preference List' },
     { icon: MessageCircle, path: '/student/chatpage',           label: 'Chat',                    badge: chatUnreadCount },
-{ icon: Bell, path: '/student/notifications', label: 'Notifications', badge: unreadCount + announcementUnread },
+    { icon: Bell, path: '/student/notifications', label: 'Notifications', badge: unreadCount + announcementUnread },
     { icon: Folder,        path: '/student/documents',          label: 'Documents & Resources' },
     { icon: Calendar,      path: '/student/meetings',           label: 'Meeting Management' },
+    { icon: Trophy,        path: '/student/results',            label: 'My Results' },
   ];
 
   return (

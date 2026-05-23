@@ -19,51 +19,57 @@ const SpecializationsTab = () => {
   }, []);
 
   const fetchSpecializations = async () => {
+    setLoading(true);
     try {
-      // TEMPORAIRE: Données mockées
-      const mockData = [
-        {
-          _id: "1",
-          code: "GL",
-          name: "Génie Logiciel",
-          studentCount: 45,
-          projectCount: 12,
-        },
-        {
-          _id: "2",
-          code: "SIL",
-          name: "Systèmes d'Information",
-          studentCount: 38,
-          projectCount: 8,
-        },
-        {
-          _id: "3",
-          code: "RSS",
-          name: "Réseaux et Sécurité",
-          studentCount: 42,
-          projectCount: 10,
-        },
-      ];
-
-      setSpecializations(mockData);
-      setLoading(false);
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res  = await fetch("http://localhost:3000/api/specialities", { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to fetch");
+      // Normalize field names: backend returns id, student_count, project_count
+      const normalized = data.map(s => ({
+        _id:          s.id,
+        id:           s.id,
+        code:         s.code,
+        name:         s.name,
+        description:  s.description,
+        studentCount: s.student_count  ?? 0,
+        projectCount: s.project_count  ?? 0,
+      }));
+      setSpecializations(normalized);
     } catch (err) {
-      console.error("Error:", err);
+      console.error("fetchSpecializations error:", err);
       setError(err.message);
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem("token");
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
     try {
-      // Simulation
-      alert("Fonctionnalité à connecter au backend");
-      fetchSpecializations();
+      const url    = editingId
+        ? `http://localhost:3000/api/specialities/${editingId}`
+        : `http://localhost:3000/api/specialities`;
+      const method = editingId ? "PUT" : "POST";
+      const res    = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify({ code: formData.code, name: formData.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to save");
+      await fetchSpecializations();
       setShowModal(false);
       resetForm();
     } catch (err) {
       console.error("Error saving:", err);
+      alert(`❌ ${err.message}`);
     }
   };
 
@@ -76,14 +82,20 @@ const SpecializationsTab = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Êtes-vous sûr ?")) {
-      try {
-        alert("Suppression à connecter au backend");
-        fetchSpecializations();
-      } catch (err) {
-        console.error("Error:", err);
-      }
+const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this major?")) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res  = await fetch(`http://localhost:3000/api/specialities/${id}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete");
+      await fetchSpecializations();
+    } catch (err) {
+      console.error("Error deleting:", err);
+      alert(`❌ ${err.message}`);
     }
   };
 

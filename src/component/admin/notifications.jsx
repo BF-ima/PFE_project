@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layout/Sidebar.jsx";
 import { ProfileDropdown } from '../supervisor/HomePage';
@@ -17,54 +17,53 @@ import {
   Megaphone,
 } from "lucide-react";
 
+const BASE       = 'http://localhost:3000';
+const getToken   = () => localStorage.getItem('token');
+const authHeader = () => ({ Authorization: `Bearer ${getToken()}` });
+
+const formatDate = (str) => {
+  if (!str) return '—';
+  const d = new Date(str);
+  return d.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+};
+
 const Notifications = () => {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("all");
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [activeTab, setActiveTab] = useState("notifications");
-
-  // User actuel
   const { currentUser } = useCurrentUser();
+  const [notifications, setNotifications] = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [unreadCount,   setUnreadCount]   = useState(0);
 
-  // Données mockées des notifications
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: "info",
-      title: "New message",
-      description: "You have a new message from John willson",
-      date: "Mar 24, 2026 - 10:15",
-      read: false,
-      icon: MessageCircle,
-    },
-    {
-      id: 2,
-      type: "urgent",
-      title: "Submission Deadline",
-      description: "Your preference list submission is due in 2 hours",
-      date: "Mar 24, 2026 - 10:00",
-      read: false,
-      icon: AlertTriangle,
-    },
-    {
-      id: 3,
-      type: "alert",
-      title: "Project Allocation",
-      description: "Automatic allocation process has started",
-      date: "Mar 23, 2026 - 16:30",
-      read: true,
-      icon: AlertCircle,
-    },
-    {
-      id: 4,
-      type: "info",
-      title: "New Team Created",
-      description: "Team Alpha has been created with 4 members",
-      date: "Mar 23, 2026 - 14:20",
-      read: true,
-      icon: FileText,
-    },
-  ]);
+
+
+    // ── Fetch notifications from the real API ─────────────────────────────
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`${BASE}/api/notifications`, { headers: authHeader() });
+      const data = await res.json();
+      if (!res.ok) { console.error(data.message); return; }
+      // Normalize: API returns is_read (0/1), convert to boolean `read`
+      const normalized = (data.notifications || []).map(n => ({
+        ...n,
+        read: !!n.is_read,
+      }));
+      setNotifications(normalized);
+      setUnreadCount(data.unread_count ?? normalized.filter(n => !n.read).length);
+    } catch (err) {
+      console.error('fetchNotifications error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
   // Handlers
   const handleLogout = () => {
@@ -77,57 +76,68 @@ const Notifications = () => {
     console.log("🔐 Changement de mot de passe:", formData);
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map((notif) => ({ ...notif, read: true })));
+    const handleMarkAllRead = async () => {
+    try {
+      await fetch(`${BASE}/api/notifications/read-all`, {
+        method:  'PATCH',
+        headers: authHeader(),
+      });
+      // Update local state immediately
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (err) { console.error(err); }
   };
 
-  const handleMarkAsRead = (id) => {
-    setNotifications(
-      notifications.map((notif) =>
-        notif.id === id ? { ...notif, read: true } : notif,
-      ),
-    );
+   const handleMarkAsRead = async (id) => {
+    try {
+      await fetch(`${BASE}/api/notifications/${id}/read`, {
+        method:  'PATCH',
+        headers: authHeader(),
+      });
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) { console.error(err); }
   };
 
-  const handleMarkAsUnread = (id) => {
-    setNotifications(
-      notifications.map((notif) =>
-        notif.id === id ? { ...notif, read: false } : notif,
-      ),
-    );
+  
+  const handleMarkAsUnread = async (id) => {
+    try {
+      await fetch(`${BASE}/api/notifications/${id}/unread`, {
+        method:  'PATCH',
+        headers: authHeader(),
+      });
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, read: false } : n)
+      );
+      setUnreadCount(prev => prev + 1);
+    } catch (err) { console.error(err); }
   };
 
   // Filtrer les notifications
-  const filteredNotifications = notifications.filter((notif) => {
-    const matchesFilter = activeFilter === "all" || notif.type === activeFilter;
+    const filteredNotifications = notifications.filter((notif) => {
+    const normalizedType = (notif.type || "").toLowerCase();
+    const mappedType = normalizedType === "defense" ? "info" : normalizedType;
+    const matchesFilter = activeFilter === "all" || mappedType === activeFilter;
     const matchesUnread = !unreadOnly || !notif.read;
     return matchesFilter && matchesUnread;
   });
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  
 
   // Obtenir l'icône et la couleur selon le type
-  const getTypeConfig = (type) => {
+ const getTypeConfig = (type) => {
     const configs = {
-      info: { icon: Info, color: "bg-blue-100 text-blue-600", label: "Info" },
-      alert: {
-        icon: AlertCircle,
-        color: "bg-orange-100 text-orange-600",
-        label: "Alert",
-      },
-      urgent: {
-        icon: AlertTriangle,
-        color: "bg-red-100 text-red-600",
-        label: "Urgent",
-      },
-      reminder: {
-        icon: Clock,
-        color: "bg-yellow-100 text-yellow-600",
-        label: "Reminder",
-      },
+      info:     { icon: Info,          color: "bg-blue-100 text-blue-600",   label: "Info" },
+      alert:    { icon: AlertCircle,   color: "bg-orange-100 text-orange-600", label: "Alert" },
+      urgent:   { icon: AlertTriangle, color: "bg-red-100 text-red-600",     label: "Urgent" },
+      reminder: { icon: Clock,         color: "bg-yellow-100 text-yellow-600", label: "Reminder" },
+      defense:  { icon: Info,          color: "bg-blue-100 text-blue-600", label: "Info" },
     };
-    return configs[type] || configs.info;
+    return configs[(type || "").toLowerCase()] || configs.info;
   };
+
+  
 
   return (
     <div className="flex h-screen bg-[#f5f6f8]">
@@ -164,17 +174,24 @@ const Notifications = () => {
           <div className="max-w-5xl mx-auto">
             {/* Tabs */}
             <div className="flex items-center gap-4 mb-6">
-              <button
-                onClick={() => setActiveTab("notifications")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  activeTab === "notifications"
-                    ? "bg-[#1e3a5f] text-white shadow-sm"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-              >
-                <Bell size={18} />
-                Notifications
-              </button>
+  
+            <button
+              onClick={() => setActiveTab("notifications")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+               activeTab === "notifications"
+                 ? "bg-[#1e3a5f] text-white shadow-sm"
+                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+               }`}
+            >
+              <Bell size={18} />
+  Notifications
+  {/* ADD: red badge showing unread count, exactly like student page */}
+  {unreadCount > 0 && (
+    <span className="ml-1 min-w-[20px] h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+      {unreadCount > 99 ? "99+" : unreadCount}
+    </span>
+  )}
+</button>
 
               {/* ✅ Bouton Announcements avec navigation vers une route dédiée */}
               <button
@@ -261,8 +278,8 @@ const Notifications = () => {
                   </div>
                 ) : (
                   filteredNotifications.map((notification) => {
-                    const IconComponent = notification.icon;
                     const typeConfig = getTypeConfig(notification.type);
+                    const IconComponent = typeConfig.icon; 
 
                     return (
                       <div
@@ -293,10 +310,10 @@ const Notifications = () => {
                                   {notification.title}
                                 </h3>
                                 <p className="text-sm text-gray-600 mt-1">
-                                  {notification.description}
+                                  {notification.message}
                                 </p>
                                 <p className="text-xs text-gray-400 mt-2">
-                                  {notification.date}
+                                  {formatDate(notification.created_at)}
                                 </p>
                               </div>
 
