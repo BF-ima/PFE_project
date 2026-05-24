@@ -307,6 +307,7 @@ const fetchPendingRequests = async () => {
   teamId: r.team_id,
   projectTitle: r.project_title,
   supervisor: r.teacher_name,
+  externalSupervisor: r.external_supervisor_name || null,
   requestedDate: new Date(r.requested_at).toLocaleDateString(),
   members: r.members || [],
   deliverables: {
@@ -919,6 +920,9 @@ const res = await fetch(endpoint, {
                           <div className="flex items-center gap-1.5">
                             <User size={15} className="text-[#2D8FBF]" />
                             <span>Supervisor: <strong>{team.supervisor}</strong></span>
+{team.externalSupervisor && (
+  <span> | External Supervisor: <strong>{team.externalSupervisor}</strong></span>
+)}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Calendar size={15} className="text-[#2D8FBF]" />

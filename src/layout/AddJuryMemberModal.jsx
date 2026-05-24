@@ -100,7 +100,7 @@ const AddJuryMemberModal = ({ isOpen, onClose, onConfirm, teamId }) => {
                 <option value="Examiner">Examiner</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">
-                President grade must be ≥ Examiner grade (Professeur &gt; MCF A &gt; MCF B &gt; Maitre Assistant).
+                President grade must be ≥ Examiner grade.
               </p>
             </div>
 

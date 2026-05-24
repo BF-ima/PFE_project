@@ -364,6 +364,7 @@ const DocumentsTab = ({ supervisorProjects }) => {
   const [documents,       setDocuments]       = useState([]);
   const [loading,         setLoading]         = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [hasTeams,        setHasTeams]        = useState(null); // null = loading
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
@@ -375,7 +376,18 @@ const DocumentsTab = ({ supervisorProjects }) => {
     finally { setLoading(false); }
   }, []);
 
+  // ── Check whether this supervisor has at least one team ──────────────────
+  useEffect(() => {
+    fetch(`${BASE}/api/teams/my-supervisor-teams`, { headers: authHeader() })
+      .then(r => r.json())
+      .then(data => setHasTeams((data.teams || []).length > 0))
+      .catch(() => setHasTeams(false));
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
+
   useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+
+  const uploadDisabled = hasTeams === false; // false = confirmed no teams; null = still loading
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
@@ -392,11 +404,25 @@ const DocumentsTab = ({ supervisorProjects }) => {
             <p className="text-base text-gray-500 mt-0.5">Send documents to your teams</p>
           </div>
         </div>
-        <button onClick={() => setShowUploadModal(true)}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90"
-          style={{ backgroundColor: '#193962' }}>
-          <Plus size={14} /> Upload a document
-        </button>
+
+        {/* ── Upload button — disabled with tooltip when no teams ── */}
+        <div className="relative group">
+          <button
+            onClick={() => !uploadDisabled && setShowUploadModal(true)}
+            disabled={uploadDisabled || hasTeams === null}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm font-semibold
+                       hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: '#193962' }}>
+            <Plus size={14} /> Upload a document
+          </button>
+          {uploadDisabled && (
+            <div className="absolute right-0 top-full mt-1 w-64 bg-gray-800 text-white text-xs
+                            rounded-lg px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100
+                            transition-opacity pointer-events-none z-10">
+              No teams are assigned to your project yet. You can upload documents once a team joins.
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="p-10">
@@ -586,14 +612,7 @@ const TeamDeliverablesDetail = ({ team, onBack }) => {
           </div>
         )}
 
-        {/* Defense authorization */}
-        <button
-          onClick={() => !authSent && setShowAuthModal(true)}
-          disabled={authSent}
-          className="w-full py-3 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ backgroundColor: '#1e3a5f' }}>
-          {authSent ? '✓ Authorization Sent' : 'Send defense authorization request'}
-        </button>
+        
       </div>
 
       {feedbackModal && (

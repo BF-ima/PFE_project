@@ -90,7 +90,7 @@ const EMPTY_FORM = {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-const AddUserModal = ({ isOpen, onClose, userType, onAdd, specialities = [], promos = [] }) => {
+const AddUserModal = ({ isOpen, onClose, userType, onAdd, specialities = [], promos = [], ranks = [] }) => {
   const [err, setErr]           = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
 
@@ -203,15 +203,16 @@ const AddUserModal = ({ isOpen, onClose, userType, onAdd, specialities = [], pro
       value={formData.specialization}
       onChange={set('specialization')}
     />
-    <SelectField
+  <SelectField
       label="Rank"
       value={formData.rank}
       onChange={set('rank')}
       options={[
         { value: 'Professeur', label: 'Professeur' },
-        { value: 'MCF A', label: 'MCF A' },
-        { value: 'MCF B', label: 'MCF B' },
-        { value: 'Maitre Assistant', label: 'Maitre Assistant' },
+        { value: 'Maître_de_conférences_A', label: 'Maître_de_conférences_A' },
+        { value: 'Maître_de_conférences_B', label: 'Maître_de_conférences_B' },
+        { value: 'Maître_Assistant_A', label: 'Maître_Assistant_A' },
+        { value: 'Maître_Assistant_B', label: 'Maître_Assistant_B' },
       ]}
     />
   </>

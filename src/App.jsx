@@ -53,7 +53,6 @@ function App() {
     <>
       <Routes>
         <Route index path='/login' element={<Login />} />
-        <Route index path='/' element={<Home />} />
         <Route index path='/resetpw' element={<ResetPW />} />
         <Route index path='/resetpss/:token' element={<ResetPss />} />
         <Route index path='/projectsdashboard' element={<ProjectDashboard />} /> {/*Admin session */}

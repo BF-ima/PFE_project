@@ -4,7 +4,7 @@ import SupervisorSidebar from '../../layout/SupervisorSidebar';
 import { ProfileDropdown } from '../supervisor/HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
 import {
-   CalendarClock, Plus, Trash2,
+  Facebook, Linkedin, CalendarClock, Plus, Trash2,
   ChevronDown, ChevronUp, Users, X, Loader2, Bell,
 } from 'lucide-react';
 
@@ -313,7 +313,14 @@ const SupervisorDeadlinesPage = () => {
               <h1 className="text-xl font-bold text-[#1e3a5f]">Deliverable Deadlines</h1>
             </div>
             <div className="flex items-center gap-2">
-              
+              <a href="https://www.facebook.com/esisba.edu" target="_blank" rel="noopener noreferrer"
+                className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all shadow-sm">
+                <Facebook size={18} />
+              </a>
+              <a href="https://www.linkedin.com/school/esisba" target="_blank" rel="noopener noreferrer"
+                className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-lg hover:from-[#152a4d] hover:to-[#2575a0] transition-all shadow-sm">
+                <Linkedin size={18} />
+              </a>
               <ProfileDropdown user={currentUser} onLogout={handleLogout} />
             </div>
           </div>

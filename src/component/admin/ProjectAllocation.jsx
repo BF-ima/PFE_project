@@ -94,17 +94,20 @@ const ProjectAllocation = () => {
 
   // ── Check existing results → redirect ──────────────────────────────────
   useEffect(() => {
-    const checkExistingResults = async () => {
-      const res  = await fetch(`${BASE}/distribution/results`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      const data = await res.json();
-      if (data.results?.length > 0) {
-        navigate("/allocationresults", { replace: true });
-      }
-    };
-    checkExistingResults();
-  }, []);
+  const checkExistingResults = async () => {
+    const res  = await fetch(`${BASE}/distribution/results`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+    const data = await res.json();
+    // Only redirect if there are non-direct assignments (i.e. algorithm was actually run)
+    const algorithmResults = (data.results || []).filter(r => r.mode !== 'direct');
+    if (algorithmResults.length > 0) {
+      navigate("/allocationresults", { replace: true });
+    }
+  };
+  checkExistingResults();
+}, []);
+
 
   // ── Fetch deadline ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -351,7 +354,6 @@ const ProjectAllocation = () => {
               {[
                 { value: "average",      label: "Par moyenne" },
                 { value: "date",         label: "Par date" },
-                { value: "average_date", label: "Moy + Date" },
               ].map((m) => (
                 <button key={m.value} onClick={() => setSelectedMode(m.value)}
                   className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SupervisorSidebar from '../../layout/SupervisorSidebar';
-import {Check, Clock } from 'lucide-react';
+import { Check, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ProfileDropdown } from './HomePage';
 import useCurrentUser from '../../hooks/useCurrentUser';
@@ -25,6 +25,8 @@ function AddProjectPage() {
   const [studentEmailError,       setStudentEmailError]       = useState('');
   const [projectDeadline,         setProjectDeadline]         = useState(null);
   const [isProjectDeadlinePassed, setIsProjectDeadlinePassed] = useState(false);
+  const [studentSpecialityId,     setStudentSpecialityId]     = useState(null);
+  const [specialityMismatch,      setSpecialityMismatch]      = useState(false);
 
   const { currentUser } = useCurrentUser();
 
@@ -35,8 +37,16 @@ function AddProjectPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (name === 'external_supervisor')    setExtSupError('');
-    if (name === 'assigned_student_email') setStudentEmailError('');
+    if (name === 'external_supervisor') setExtSupError('');
+    if (name === 'assigned_student_email') {
+      setStudentEmailError('');
+      setStudentSpecialityId(null);
+      setSpecialityMismatch(false);
+    }
+    // Re-check speciality mismatch live when speciality dropdown changes
+    if (name === 'specialityId' && studentSpecialityId) {
+      setSpecialityMismatch(value && String(studentSpecialityId) !== String(value));
+    }
   };
 
   // ── Validate external supervisor email on blur ──
@@ -60,24 +70,36 @@ function AddProjectPage() {
     }
   };
 
-  // ── Validate student email on blur ──
+  // ── Validate student email on blur + fetch their speciality ──
   const handleStudentEmailBlur = async () => {
     const email = formData.assigned_student_email.trim();
-    if (!email) return;
+    if (!email) {
+      setStudentSpecialityId(null);
+      setSpecialityMismatch(false);
+      return;
+    }
     try {
       const token = localStorage.getItem('token');
       const res   = await fetch(
-        `http://localhost:3000/api/user/check-email?email=${encodeURIComponent(email)}&role=etudiant`,
+        `http://localhost:3000/api/projects/check-student?email=${encodeURIComponent(email)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await res.json();
-      if (!res.ok || !data.exists) {
+      if (!data.exists) {
         setStudentEmailError('No student found with this email.');
+        setStudentSpecialityId(null);
+        setSpecialityMismatch(false);
       } else {
         setStudentEmailError('');
+        setStudentSpecialityId(data.speciality_id);
+        // Check immediately if a speciality is already selected
+        if (formData.specialityId && data.speciality_id) {
+          setSpecialityMismatch(String(data.speciality_id) !== String(formData.specialityId));
+        }
       }
     } catch {
       setStudentEmailError('Could not verify email.');
+      setStudentSpecialityId(null);
     }
   };
 
@@ -108,6 +130,11 @@ function AddProjectPage() {
 
     if (extSupError || studentEmailError) {
       setError('Please fix the email errors before submitting.');
+      return;
+    }
+
+    if (specialityMismatch) {
+      setError("The selected speciality does not match the assigned student's speciality.");
       return;
     }
 
@@ -287,6 +314,8 @@ function AddProjectPage() {
                                 setFormData(prev => ({ ...prev, external_supervisor: '', assigned_student_email: '' }));
                                 setExtSupError('');
                                 setStudentEmailError('');
+                                setStudentSpecialityId(null);
+                                setSpecialityMismatch(false);
                               }
                             }}>
                             <span className={`w-5 h-5 flex items-center justify-center rounded-md border transition-all
@@ -365,17 +394,31 @@ function AddProjectPage() {
                     )}
 
                     {/* SPECIALITY */}
-                    <div className="flex items-center mb-4">
-                      <label className="w-36 text-xs font-medium text-[#1e3a5f]">
+                    <div className="flex items-start mb-4">
+                      <label className="w-36 text-xs font-medium text-[#1e3a5f] pt-1">
                         Speciality: <span className="text-red-500">*</span>
                       </label>
-                      <select name="specialityId" value={formData.specialityId} onChange={handleChange} required
-                        className="flex-1 max-w-xs px-3 py-1.5 text-sm bg-[#f5f6f8] border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF]">
-                        <option value="">Select a speciality...</option>
-                        {specialities.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
+                      <div className="flex-1 max-w-xs">
+                        <select
+                          name="specialityId"
+                          value={formData.specialityId}
+                          onChange={handleChange}
+                          required
+                          className={`w-full px-3 py-1.5 text-sm bg-[#f5f6f8] border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D8FBF] ${
+                            specialityMismatch ? 'border-red-400' : 'border-gray-200'
+                          }`}
+                        >
+                          <option value="">Select a speciality...</option>
+                          {specialities.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        {specialityMismatch && (
+                          <p className="text-xs text-red-500 mt-1">
+                            This speciality does not match the assigned student's speciality.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* DESCRIPTION */}
@@ -395,7 +438,9 @@ function AddProjectPage() {
                         className="px-7 py-1.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium disabled:opacity-50">
                         Cancel
                       </button>
-                      <button type="submit" disabled={isLoading || !!extSupError || !!studentEmailError}
+                      <button
+                        type="submit"
+                        disabled={isLoading || !!extSupError || !!studentEmailError || specialityMismatch}
                         className="px-7 py-1.5 bg-gradient-to-r from-[#18335E] to-[#2D8FBF] text-white rounded-xl hover:from-[#152a4d] hover:to-[#2575a0] transition-colors font-medium disabled:opacity-50 flex items-center gap-2">
                         {isLoading ? (
                           <>
