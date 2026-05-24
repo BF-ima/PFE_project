@@ -22,18 +22,23 @@ exports.getMyTeamsDeadlines = async (req, res) => {
 
     // Get all teams assigned to projects supervised by this teacher
     const [teams] = await db.execute(
-      `SELECT t.id AS team_id,
-              CONCAT(u.first_name, ' ', u.last_name) AS leader_name,
-              p.title AS project_title,
-              p.id    AS project_id
-       FROM team t
-       JOIN assignment a   ON a.team_id    = t.id
-       JOIN project p      ON p.id         = a.project_id
-       JOIN users u        ON u.id         = t.leader_id
-       WHERE p.teacher_id = ?
-       ORDER BY p.title, t.id`,
-      [user.id]
-    );
+  `SELECT t.id AS team_id,
+          CONCAT(u.first_name, ' ', u.last_name) AS leader_name,
+          p.title AS project_title,
+          p.id    AS project_id
+   FROM team t
+   JOIN users u ON u.id = t.leader_id
+   JOIN project p ON (
+     p.id = t.project_id                          -- via team.project_id
+     OR p.id = (
+       SELECT a.project_id FROM assignment a
+       WHERE a.team_id = t.id LIMIT 1
+     )                                             -- via assignment table
+   )
+   WHERE p.teacher_id = ?
+   ORDER BY p.title, t.id`,
+  [user.id]
+);
 
     // For each team, get its deadlines
     const teamsWithDeadlines = await Promise.all(
@@ -64,6 +69,7 @@ exports.setDeadline = async (req, res) => {
 
   try {
     const user = await getUserFromToken(token);
+    console.log("DEBUG user from token:", user); // add this
     if (user.role !== "enseignant") {
       return res.status(403).json({ message: "Accès refusé" });
     }

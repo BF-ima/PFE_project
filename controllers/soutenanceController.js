@@ -180,12 +180,15 @@ exports.getRequests = async (req, res) => {
          t.id  AS team_id,
          COALESCE(p.title, '—') AS project_title,
          CONCAT(u.first_name, ' ', u.last_name) AS teacher_name,
+         CONCAT(eu.first_name, ' ', eu.last_name) AS external_supervisor_name,
          (SELECT COUNT(*) FROM deliverable d WHERE d.team_id = t.id AND d.status = 'APPROVED') AS deliverables_count,
          (SELECT COUNT(*) FROM meeting m WHERE m.team_id = t.id AND m.status = 'COMPLETED')    AS completed_meetings
        FROM soutenance_request sr
        JOIN team t        ON t.id  = sr.team_id
        LEFT JOIN assignment a ON a.team_id = t.id
        LEFT JOIN project p    ON p.id = a.project_id
+       LEFT JOIN external_supervisor es ON es.id = p.external_supervisor_id
+LEFT JOIN users eu               ON eu.id = es.id
        JOIN users u       ON u.id = sr.teacher_id
        WHERE sr.status = ?
        ORDER BY sr.requested_at DESC`,
@@ -339,7 +342,16 @@ exports.approveRequest = async (req, res) => {
 
     // Notify supervisor
     await sendNotification(sr.teacher_id, "info", "Defense Request Approved", approvalMsg);
-
+    const [extSupApprove] = await db.execute(
+  `SELECT p.external_supervisor_id
+   FROM assignment a JOIN project p ON p.id = a.project_id
+   WHERE a.team_id = ? LIMIT 1`,
+  [sr.team_id]
+);
+const extIdApprove = extSupApprove[0]?.external_supervisor_id || null;
+if (extIdApprove) {
+  await sendNotification(extIdApprove, "info", "Defense Request Approved", approvalMsg);
+}
 
     res.json({ message: "Request approved.", soutenanceId });
   } catch (err) {
@@ -389,6 +401,20 @@ await sendNotification(
   "Defense Request Rejected",
   `Your defense request for team #${sr.team_id} has been rejected.${commentText}`
 );
+
+const [extSupReject] = await db.execute(
+  `SELECT p.external_supervisor_id
+   FROM assignment a JOIN project p ON p.id = a.project_id
+   WHERE a.team_id = ? LIMIT 1`,
+  [sr.team_id]
+);
+const extIdReject = extSupReject[0]?.external_supervisor_id || null;
+if (extIdReject) {
+  await sendNotification(
+    extIdReject, "alert", "Defense Request Rejected",
+    `The defense request for team #${sr.team_id} has been rejected.${commentText}`
+  );
+}
 
 
     res.json({ message: "Request rejected." });
@@ -564,6 +590,42 @@ exports.updateSoutenance = async (req, res) => {
       }
     }
 
+    // ── Jury schedule conflict check ──
+    // If date or time is being changed, verify no jury member has another defense
+    // within 2 hours of the new time
+    if (effectiveDate && effectiveTime) {
+      const [juryMembers] = await db.execute(
+        `SELECT teacher_id, full_name, role
+         FROM soutenance_jury
+         WHERE soutenance_id = ? AND teacher_id IS NOT NULL`,
+        [id]
+      );
+
+      for (const member of juryMembers) {
+        const [juryConflict] = await db.execute(
+          `SELECT s.time, sj.role
+           FROM soutenance_jury sj
+           JOIN soutenance s ON s.id = sj.soutenance_id
+           WHERE sj.teacher_id = ?
+             AND sj.soutenance_id != ?
+             AND DATE(s.date) = DATE(?)
+             AND ABS(
+                   TIMESTAMPDIFF(MINUTE,
+                     CONCAT(DATE(?), ' ', s.time),
+                     CONCAT(DATE(?), ' ', ?)
+                   )
+                 ) < 120`,
+          [member.teacher_id, parseInt(id), effectiveDate, effectiveDate, effectiveDate, effectiveTime]
+        );
+
+        if (juryConflict.length) {
+          return res.status(409).json({
+            message: `Jury member "${member.full_name}" (${member.role}) already has another defense on this date at ${juryConflict[0].time}. A defense takes 2 hours — please choose a different time.`,
+          });
+        }
+      }
+    }
+
 await db.execute(
   `UPDATE soutenance
    SET date = COALESCE(?, date),
@@ -641,6 +703,16 @@ await db.execute(
     if (supervisorId) {
       await sendNotification(supervisorId, "info", "Defense Schedule Updated", scheduleMsg);
     }
+    const [extSupUpdate] = await db.execute(
+  `SELECT p.external_supervisor_id
+   FROM assignment a JOIN project p ON p.id = a.project_id
+   WHERE a.team_id = ? LIMIT 1`,
+  [s.team_id]
+);
+const extIdUpdate = extSupUpdate[0]?.external_supervisor_id || null;
+if (extIdUpdate) {
+  await sendNotification(extIdUpdate, "info", "Defense Schedule Updated", scheduleMsg);
+}
 
     // ── Email builder ──
     const buildEmail = (recipientName, roleLabel) => `
@@ -865,6 +937,16 @@ exports.scheduleSoutenance = async (req, res) => {
     if (supervisorId) {
       await sendNotification(supervisorId, "info", "New Defense Schedule", scheduleMsg);
     }
+    const [extSupSched] = await db.execute(
+  `SELECT p.external_supervisor_id
+   FROM assignment a JOIN project p ON p.id = a.project_id
+   WHERE a.team_id = ? LIMIT 1`,
+  [s.team_id]
+);
+const extIdSched = extSupSched[0]?.external_supervisor_id || null;
+if (extIdSched) {
+  await sendNotification(extIdSched, "info", "New Defense Schedule", scheduleMsg);
+}
 
     // ✅ NO jury email sent here
 
@@ -1093,6 +1175,20 @@ exports.publishResult = async (req, res) => {
         `🎓 The results for "${s.project_title}" have been published. Check your Results page now.`
       );
     }
+
+    const [extSupPublish] = await db.execute(
+  `SELECT p.external_supervisor_id
+   FROM assignment a JOIN project p ON p.id = a.project_id
+   WHERE a.team_id = ? LIMIT 1`,
+  [s.team_id]
+);
+const extIdPublish = extSupPublish[0]?.external_supervisor_id || null;
+if (extIdPublish) {
+  await sendNotification(
+    extIdPublish, "info", "Defense Results Published",
+    `🎓 The results for "${s.project_title}" have been published.`
+  );
+}
 
     res.json({ message: "Result published and students notified." });
   } catch (err) {

@@ -168,19 +168,27 @@ exports.getAllTeams = async (req, res) => {
 
     let query = `
       SELECT t.*,
-             CONCAT(u.first_name, ' ', u.last_name)              AS leader_name,
-             u.email                                               AS leader_email,
-             COALESCE(p_a.title, p_t.title)                       AS project_title,
-             COALESCE(p_a.max_students, p_t.max_students)         AS project_max_students,
-             a.mode                                                AS assignment_mode,
+             CONCAT(u.first_name, ' ', u.last_name)            AS leader_name,
+             u.email                                             AS leader_email,
+             CASE
+               WHEN a.project_id IS NOT NULL THEN p_a.title
+               WHEN t.project_id IS NOT NULL THEN p_t.title
+               ELSE NULL
+             END                                                 AS project_title,
+             CASE
+               WHEN a.project_id IS NOT NULL THEN p_a.max_students
+               WHEN t.project_id IS NOT NULL THEN p_t.max_students
+               ELSE NULL
+             END                                                 AS project_max_students,
+             a.mode                                              AS assignment_mode,
              a.assigned_at,
-             COUNT(CASE WHEN tm.status = 'ACCEPTED' THEN 1 END)   AS member_count
+             COUNT(CASE WHEN tm.status = 'ACCEPTED' THEN 1 END) AS member_count
       FROM team t
-      LEFT JOIN users       u   ON t.leader_id   = u.id
-      LEFT JOIN team_member tm  ON tm.team_id    = t.id
-      LEFT JOIN assignment  a   ON a.team_id     = t.id
-      LEFT JOIN project     p_a ON p_a.id        = a.project_id
-      LEFT JOIN project     p_t ON p_t.id        = t.project_id
+      LEFT JOIN users       u   ON u.id   = t.leader_id
+      LEFT JOIN team_member tm  ON tm.team_id = t.id
+      LEFT JOIN assignment  a   ON a.team_id  = t.id
+      LEFT JOIN project     p_a ON p_a.id     = a.project_id
+      LEFT JOIN project     p_t ON p_t.id     = t.project_id
     `;
 
     const conditions = [];
@@ -196,11 +204,16 @@ exports.getAllTeams = async (req, res) => {
     }
 
     if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
-    query += ` GROUP BY t.id, u.first_name, u.last_name, u.email,
-                        p_a.title, p_a.max_students,
-                        p_t.title, p_t.max_students,
-                        a.mode, a.assigned_at
-               ORDER BY t.created_at DESC`;
+
+    query += `
+      GROUP BY
+        t.id, t.leader_id, t.project_id, t.status, t.created_at,
+        u.first_name, u.last_name, u.email,
+        a.project_id, a.mode, a.assigned_at,
+        p_a.title, p_a.max_students,
+        p_t.title, p_t.max_students
+      ORDER BY t.created_at DESC
+    `;
 
     const [teams] = await db.execute(query, params);
     res.json({ teams });

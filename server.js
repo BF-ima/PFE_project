@@ -26,6 +26,9 @@ const path = require('path');
 
 const app = express();
 
+
+app.set('etag', false); // ✅ disables 304 caching
+
 // middlewares
 app.use(express.json());        // pour lire req.body JSON
 app.use(cookieParser());        // pour lire cookies
@@ -70,6 +73,7 @@ app.use("/api/deadline", require("./routes/deadlineRoutes"));
 app.use("/api/documents", require("./routes/documentRoutes"));
 app.use('/api/meetings', meetingRoutes);
 app.use("/api", soutenanceRoutes);
+app.use("/api/deliverable-deadlines", deliverableDeadline);
 
 
 

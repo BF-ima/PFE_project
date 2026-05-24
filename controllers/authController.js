@@ -453,12 +453,20 @@ exports.updateUser = async (req, res) => {
           break;
 
         case 'etudiant':
-          await connection.execute(
-            "UPDATE student SET moyenne = ?, speciality_id = ?, promo_id = ? WHERE id = ?",
-            [moyenne || null, speciality_id || null, promo_id || null, id]
-          );
-          break;
-
+  await connection.execute(
+    `UPDATE student SET 
+      moyenne = ?,
+      speciality_id = IF(? IS NOT NULL, ?, speciality_id),
+      promo_id      = IF(? IS NOT NULL, ?, promo_id)
+     WHERE id = ?`,
+    [
+      moyenne || null,
+      speciality_id || null, speciality_id || null,
+      promo_id || null,      promo_id || null,
+      id
+    ]
+  );
+  break;
         case 'entreprise':
     await connection.execute(
         "UPDATE external_supervisor SET organization = ?, position = ?, department = ? WHERE id = ?",

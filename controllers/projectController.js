@@ -540,25 +540,51 @@ exports.getValidatedProjects = async (req, res) => {
   if (!token) return res.status(401).json({ message: "Non authentifié" });
 
   try {
-  
-const [projects] = await db.execute(
-  `SELECT p.id, p.title, p.description, p.created_at, p.max_students,
-          p.speciality_id,
-          CONCAT(t.first_name, ' ', t.last_name) AS supervisor_name,
-          CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name,
-          e.email AS external_supervisor_email
-   FROM project p
-   LEFT JOIN users t ON p.teacher_id             = t.id
-   LEFT JOIN users e ON p.external_supervisor_id = e.id
-   WHERE p.status IN ('VALIDATED', 'ASSIGNED')
-   ORDER BY p.created_at DESC`,
-  []
-);
+    const [projects] = await db.execute(
+      `SELECT p.id, p.title, p.description, p.created_at, p.max_students,
+              p.speciality_id,
+              CONCAT(t.first_name, ' ', t.last_name) AS supervisor_name,
+              CONCAT(e.first_name, ' ', e.last_name) AS external_supervisor_name,
+              e.email AS external_supervisor_email,
+              COUNT(a.team_id) AS assigned_count
+       FROM project p
+       LEFT JOIN users t ON p.teacher_id             = t.id
+       LEFT JOIN users e ON p.external_supervisor_id = e.id
+       LEFT JOIN assignment a ON a.project_id        = p.id
+       WHERE p.status IN ('VALIDATED', 'ASSIGNED')
+         AND p.assigned_student_email IS NULL
+       GROUP BY p.id, p.title, p.description, p.created_at, p.max_students,
+                p.speciality_id, t.first_name, t.last_name,
+                e.first_name, e.last_name, e.email
+       HAVING COUNT(a.team_id) < p.max_students
+       ORDER BY p.created_at DESC`
+    );
 
     res.json({ projects });
 
   } catch (err) {
     console.error("getValidatedProjects error:", err);
     res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+
+exports.checkStudentSpeciality = async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.json({ exists: false });
+  try {
+    const [rows] = await db.execute(
+      `SELECT u.id, s.speciality_id
+       FROM users u
+       JOIN student s ON s.id = u.id
+       WHERE u.email = ? AND u.role = 'etudiant'`,
+      [email]
+    );
+    if (rows.length === 0) return res.json({ exists: false });
+    return res.json({ exists: true, speciality_id: rows[0].speciality_id });
+  } catch (err) {
+    console.error("checkStudentSpeciality error:", err);
+    res.status(500).json({ exists: false });
   }
 };

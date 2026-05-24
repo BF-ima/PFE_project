@@ -242,20 +242,35 @@ if (normalizedRole === "EXAMINER") {
 
     // ── Jury schedule conflict check ──
 // Fetch the soutenance date and time
+// ── Jury schedule conflict check (inline — 2-hour window) ──
 const [soutTime] = await db.execute(
   "SELECT date, time FROM soutenance WHERE id = ?",
   [soutenanceId]
 );
 if (soutTime.length && soutTime[0].date && soutTime[0].time) {
-  const conflict = await checkJuryConflict(
-    teacher_id,
-    soutTime[0].date,
-    soutTime[0].time,
-    parseInt(soutenanceId)
+  const sDate = soutTime[0].date; // e.g. "2026-05-26"
+  const sTime = soutTime[0].time; // e.g. "09:00:00"
+
+  const [conflictRows] = await db.execute(
+    `SELECT s.time, sj.role
+     FROM soutenance_jury sj
+     JOIN soutenance s ON s.id = sj.soutenance_id
+     WHERE sj.teacher_id = ?
+       AND sj.soutenance_id != ?
+       AND DATE(s.date) = DATE(?)
+       AND ABS(
+             TIMESTAMPDIFF(MINUTE,
+               CONCAT(DATE(?), ' ', s.time),
+               CONCAT(DATE(?), ' ', ?)
+             )
+           ) < 120`,
+    [teacher_id, parseInt(soutenanceId), sDate, sDate, sDate, sTime]
   );
-  if (conflict) {
+
+  if (conflictRows.length) {
+    const c = conflictRows[0];
     return res.status(409).json({
-      message: `${teacher.full_name} is already assigned to another defense on this date at ${conflict.time} (role: ${conflict.role}). A defense takes 2 hours — they will not be free in time.`,
+      message: `${teacher.full_name} is already assigned to another defense on this date at ${c.time} (role: ${c.role}). A defense takes 2 hours — they cannot be assigned here.`,
     });
   }
 }

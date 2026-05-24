@@ -235,15 +235,21 @@ exports.runDistribution = async (req, res) => {
 
     const { assignments, unassigned } = await simulateDistribution(mode);
 
-    // Clear previous assignments + reset project statuses
-    const [oldAssignments] = await db.execute("SELECT project_id FROM assignment");
-    for (const old of oldAssignments) {
-      await db.execute(
-        "UPDATE project SET status = 'VALIDATED' WHERE id = ?",
-        [old.project_id]
-      );
-    }
-    await db.execute("DELETE FROM assignment");
+  // Clear ONLY assignment-table records, NOT direct team.project_id assignments
+const [oldAssignments] = await db.execute("SELECT project_id FROM assignment");
+for (const old of oldAssignments) {
+  await db.execute(
+    "UPDATE project SET status = 'VALIDATED' WHERE id = ?",
+    [old.project_id]
+  );
+}
+await db.execute("DELETE FROM assignment");
+
+// ✅ Re-mark projects that are directly assigned via team.project_id
+await db.execute(
+  `UPDATE project SET status = 'ASSIGNED' 
+   WHERE id IN (SELECT project_id FROM team WHERE project_id IS NOT NULL)`
+);
 
     // Write new assignments
     for (const a of assignments) {
@@ -339,36 +345,38 @@ exports.getDistributionResults = async (req, res) => {
       return res.status(403).json({ message: "Accès refusé" });
     }
 
-    const [results] = await db.execute(
-      `SELECT a.id,
-              a.assigned_at,
-              a.mode,
-              t.id                                       AS team_id,
-              CONCAT(u.first_name, ' ', u.last_name)     AS leader_name,
-              u.email                                    AS leader_email,
-              p.id                                       AS project_id,
-              p.title                                    AS project_title,
-              p.max_students,
-              (SELECT COUNT(*) FROM team_member tm3 WHERE tm3.team_id = t.id) AS team_size,
-              (SELECT AVG(s2.moyenne)
-               FROM team_member tm2
-               JOIN student s2 ON s2.id = tm2.student_id
-               WHERE tm2.team_id = t.id)                AS team_average,
-              (SELECT MIN(w2.submitted_at)
-               FROM wish w2
-               WHERE w2.team_id = t.id AND w2.status = 'SUBMITTED') AS first_submitted_at,
-              (SELECT w3.priority
-               FROM wish w3
-               WHERE w3.team_id = t.id
-                 AND w3.project_id = p.id
-                 AND w3.status = 'SUBMITTED'
-               LIMIT 1)                                 AS assigned_priority
-       FROM assignment a
-       JOIN team    t ON t.id = a.team_id
-       JOIN users   u ON u.id = t.leader_id
-       JOIN project p ON p.id = a.project_id
-       ORDER BY a.assigned_at DESC`
-    );
+    
+const [results] = await db.execute(
+  `SELECT a.id,
+          a.assigned_at,
+          a.mode,
+          t.id                                       AS team_id,
+          CONCAT(u.first_name, ' ', u.last_name)     AS leader_name,
+          u.email                                    AS leader_email,
+          p.id                                       AS project_id,
+          p.title                                    AS project_title,
+          p.max_students,
+          p.speciality_id,                           -- ← AJOUT
+          (SELECT COUNT(*) FROM team_member tm3 WHERE tm3.team_id = t.id) AS team_size,
+          (SELECT AVG(s2.moyenne)
+           FROM team_member tm2
+           JOIN student s2 ON s2.id = tm2.student_id
+           WHERE tm2.team_id = t.id)                AS team_average,
+          (SELECT MIN(w2.submitted_at)
+           FROM wish w2
+           WHERE w2.team_id = t.id AND w2.status = 'SUBMITTED') AS first_submitted_at,
+          (SELECT w3.priority
+           FROM wish w3
+           WHERE w3.team_id = t.id
+             AND w3.project_id = p.id
+             AND w3.status = 'SUBMITTED'
+           LIMIT 1)                                 AS assigned_priority
+   FROM assignment a
+   JOIN team    t ON t.id = a.team_id
+   JOIN users   u ON u.id = t.leader_id
+   JOIN project p ON p.id = a.project_id
+   ORDER BY a.assigned_at DESC`
+);
 
     res.json({ results });
 
@@ -441,17 +449,19 @@ exports.getUnassignedTeams = async (req, res) => {
     }
 
     const [teams] = await db.execute(
-      `SELECT t.id AS team_id,
-              CONCAT(u.first_name, ' ', u.last_name) AS leader_name,
-              u.email AS leader_email,
-              (SELECT COUNT(*) FROM team_member tm WHERE tm.team_id = t.id) AS team_size,
-              (SELECT AVG(s.moyenne) FROM team_member tm2
-               JOIN student s ON s.id = tm2.student_id WHERE tm2.team_id = t.id) AS team_average
-       FROM team t
-       JOIN users u ON u.id = t.leader_id
-       WHERE t.id NOT IN (SELECT team_id FROM assignment)
-         AND t.id IN (SELECT DISTINCT team_id FROM wish WHERE status = 'SUBMITTED')`
-    );
+  `SELECT t.id AS team_id,
+          CONCAT(u.first_name, ' ', u.last_name) AS leader_name,
+          u.email AS leader_email,
+          s.speciality_id,                        -- ← AJOUT
+          (SELECT COUNT(*) FROM team_member tm WHERE tm.team_id = t.id) AS team_size,
+          (SELECT AVG(st.moyenne) FROM team_member tm2
+           JOIN student st ON st.id = tm2.student_id WHERE tm2.team_id = t.id) AS team_average
+   FROM team t
+   JOIN users u ON u.id = t.leader_id
+   JOIN student s ON s.id = t.leader_id          -- ← AJOUT
+   WHERE t.id NOT IN (SELECT team_id FROM assignment)
+     AND t.id IN (SELECT DISTINCT team_id FROM wish WHERE status = 'SUBMITTED')`
+);
 
     res.json({ teams });
 
@@ -635,14 +645,21 @@ exports.getStatistics = async (req, res) => {
       return res.status(403).json({ message: "Accès refusé" });
     }
 
+    // ── total_teams = ALL teams that exist (with or without wishes)
     const [[{ total_teams }]] = await db.execute(
-      `SELECT COUNT(DISTINCT team_id) AS total_teams FROM wish WHERE status = 'SUBMITTED'`
+      `SELECT COUNT(*) AS total_teams FROM team`
     );
+
+    // ── assigned_teams = teams assigned via assignment table OR via team.project_id
     const [[{ assigned_teams }]] = await db.execute(
-      `SELECT COUNT(*) AS assigned_teams FROM assignment`
+      `SELECT COUNT(*) AS assigned_teams FROM team
+       WHERE id IN (SELECT team_id FROM assignment)
+          OR project_id IS NOT NULL`
     );
+
     const unassigned_teams = total_teams - assigned_teams;
-    const allocation_rate  = total_teams > 0 ? Math.round((assigned_teams / total_teams) * 100) : 0;
+    const allocation_rate  = total_teams > 0
+      ? Math.round((assigned_teams / total_teams) * 100) : 0;
 
     const [[{ first_choice }]] = await db.execute(
       `SELECT COUNT(*) AS first_choice FROM assignment a
@@ -660,13 +677,13 @@ exports.getStatistics = async (req, res) => {
        WHERE w.priority >= 3 AND w.status = 'SUBMITTED'`
     );
 
-    const satisfaction_rate = total_teams > 0
-      ? Math.round((first_choice / total_teams) * 100) : 0;
+    const satisfaction_rate = assigned_teams > 0
+      ? Math.round((first_choice / assigned_teams) * 100) : 0;
 
     const [project_distribution] = await db.execute(
-      `SELECT 
-         p.id           AS project_id,
-         p.title        AS project_title,
+      `SELECT
+         p.id             AS project_id,
+         p.title          AS project_title,
          p.max_students,
          COUNT(a.team_id) AS assigned_teams
        FROM project p
